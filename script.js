@@ -12,16 +12,27 @@ const GAS_API_URL = "https://script.google.com/macros/s/AKfycbyn1jRZtt3Ytyn9CQN-
  */
 async function callApi(action, params = {}) {
   try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 20000); // 20 segundos de timeout
+
     const response = await fetch(GAS_API_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify({ action, params })
+      body: JSON.stringify({ action, params }),
+      signal: controller.signal
     });
+    
+    clearTimeout(timeoutId);
+
     if (!response.ok) { throw new Error(`Erro de rede: ${response.statusText}`); }
     const result = await response.json();
     if (!result.success) { throw new Error(result.message); }
     return result.data;
   } catch (error) {
+    if (error.name === 'AbortError') {
+      console.error(`Erro: A chamada para a ação "${action}" demorou mais de 20 segundos para responder (timeout).`);
+      throw new Error("O servidor demorou muito para responder. Verifique sua conexão ou tente novamente.");
+    }
     console.error(`Erro ao chamar a ação "${action}":`, error);
     throw error;
   }
@@ -44,7 +55,7 @@ const App = {
         isCallingClient: false
     },
     elements: {},
-    
+
     async init() {
         this.elements = {
             loader: document.getElementById('loader'), 
@@ -56,6 +67,7 @@ const App = {
             notificationContainer: document.getElementById('notification-container'),
         };
 
+        // Mostra o loader inicial enquanto busca a configuração
         this.elements.loader.classList.remove('hidden');
 
         try {
@@ -63,8 +75,9 @@ const App = {
             this.renderLoginScreen(config);
         } catch(e) {
             console.error("Falha ao carregar configuração inicial", e);
-            this.renderLoginScreen({ businessName: 'Sistema de Agendamento', logoUrl: '' });
+            this.elements.loginScreen.innerHTML = `<div class="text-center text-red-500">Falha ao carregar o sistema. Verifique sua conexão e a URL da API.</div>`;
         } finally {
+            // Esconde o loader para exibir a tela de login
             this.elements.loader.classList.add('hidden');
         }
     },
@@ -148,7 +161,7 @@ const App = {
             }
         } catch (e) {
             this.hideLoader();
-            this.elements.loginError.textContent = 'Erro de comunicação. Tente novamente.';
+            this.elements.loginError.textContent = e.message || 'Erro de comunicação. Tente novamente.';
             console.error(e);
         }
     },
