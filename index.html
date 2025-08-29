@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Painel de Agendamento</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+
+    <link rel="stylesheet" href="style.css">
+</head>
+<body class="bg-slate-100 text-slate-800">
+
+    <div id="loader" class="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-white/80 backdrop-blur-sm hidden">
+        <div class="w-16 h-16 border-4 border-t-blue-600 border-slate-200 rounded-full animate-spin-slow"></div>
+        <p id="loaderText" class="mt-4 text-lg font-semibold text-slate-600">Carregando...</p>
+    </div>
+
+    <div id="login-screen" class="flex items-center justify-center min-h-screen bg-slate-100 p-4">
+        </div>
+
+    <div id="app-container" class="hidden"></div>
+
+    <div id="modal-container" class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 hidden opacity-0 transition-opacity duration-300">
+        <div id="modal-content" class="bg-white rounded-xl shadow-2xl w-full border border-slate-200 transform scale-95 transition-transform duration-300 flex flex-col max-h-[90vh]"></div>
+    </div>
+    <div id="notification-container" class="fixed top-5 right-5 z-[101] space-y-3 w-full max-w-sm"></div>
+    <template id="notification-template">
+        <div class="notification-item flex items-start p-4 rounded-lg shadow-lg border bg-white">
+            <div class="flex-shrink-0"><i class="fa-solid fa-2x"></i></div>
+            <div class="ml-3 w-0 flex-1">
+                <p class="text-base font-semibold text-slate-800"></p>
+                <p class="mt-1 text-sm text-slate-600"></p>
+            </div>
+            <div class="ml-4 flex-shrink-0 flex">
+                <button class="inline-flex rounded-md text-slate-400 hover:text-slate-600" onclick="this.closest('.notification-item').remove()"><i class="fa-solid fa-times"></i></button>
+            </div>
+        </div>
+    </template>
+
+    <script src="script.js"></script>
+
+</body>
+</html>
