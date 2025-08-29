@@ -1498,7 +1498,7 @@ Object.assign(App, {
     const paginationContainer = container.querySelector('#client-pagination-container');
     
     const fetchAndRenderClients = async (term = '', page = 1) => {
-        resultsContainer.innerHTML = '<p class="text-slate-500 text-center">Buscando clientes...</p>';
+        resultsContainer.innerHTML = '<div class="flex justify-center items-center p-8"><i class="fa-solid fa-spinner animate-spin text-2xl text-slate-400 mr-3"></i><span class="text-slate-500">Buscando clientes...</span></div>';
         paginationContainer.innerHTML = '';
         currentPage = page;
 
@@ -1752,4 +1752,5 @@ Object.assign(App, {
 // INICIALIZAÇÃO DO APP
 // ========================================================
 document.addEventListener('DOMContentLoaded', () => App.init());
+
 
