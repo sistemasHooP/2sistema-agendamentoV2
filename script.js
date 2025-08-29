@@ -1,5 +1,5 @@
 // ========================================================
-// ARQUIVO: script.js (COMPLETO E REFATORADO)
+// ARQUIVO: script.js (VERSÃO FINAL COMPLETA E CORRIGIDA)
 // ========================================================
 
 // URL da sua API no Google Apps Script
@@ -44,8 +44,7 @@ const App = {
         isCallingClient: false
     },
     elements: {},
-    // O antigo App.api foi substituído pela função callApi global
-
+    
     async init() {
         this.elements = {
             loader: document.getElementById('loader'), 
@@ -57,13 +56,16 @@ const App = {
             notificationContainer: document.getElementById('notification-container'),
         };
 
-        // Carrega a configuração da tela de login via API
+        this.elements.loader.classList.remove('hidden');
+
         try {
             const config = await callApi('getLoginScreenConfig');
             this.renderLoginScreen(config);
         } catch(e) {
             console.error("Falha ao carregar configuração inicial", e);
-            this.renderLoginScreen({ businessName: 'Sistema de Agendamento', logoUrl: '' }); // Fallback
+            this.renderLoginScreen({ businessName: 'Sistema de Agendamento', logoUrl: '' });
+        } finally {
+            this.elements.loader.classList.add('hidden');
         }
     },
     
@@ -299,7 +301,7 @@ const App = {
         
         this.elements.appContainer.classList.add('hidden');
         this.elements.loginScreen.classList.remove('hidden');
-        // Re-render login screen to ensure it's clean
+        
         this.init();
     },
 
