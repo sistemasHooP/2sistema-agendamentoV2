@@ -1,15 +1,10 @@
 // ========================================================
-// ARQUIVO: script.js (VERSÃO FINAL COMPLETA E CORRIGIDA)
+// ARQUIVO: script.js (COMPLETO COM OTIMIZAÇÃO DE PERFORMANCE)
 // ========================================================
 
 // URL da sua API no Google Apps Script
 const GAS_API_URL = "https://script.google.com/macros/s/AKfycbyn1jRZtt3Ytyn9CQN-oNrixr5zpBFKU3gKn_whuBPXE_T6uLv-wGGxpBJJMgVyIWzpOw/exec";
 
-/**
- * Nova função para chamar a API do Google Apps Script.
- * @param {string} action - O nome da função a ser executada no Code.gs.
- * @param {object} params - Um objeto com os parâmetros para a função.
- */
 async function callApi(action, params = {}) {
   try {
     const controller = new AbortController();
@@ -40,7 +35,7 @@ async function callApi(action, params = {}) {
 
 
 // ========================================================
-// CORE DO APLICATIVO (ANTIGO JavaScript.html)
+// CORE DO APLICATIVO
 // ========================================================
 
 const App = {
@@ -67,7 +62,6 @@ const App = {
             notificationContainer: document.getElementById('notification-container'),
         };
 
-        // Mostra o loader inicial enquanto busca a configuração
         this.elements.loader.classList.remove('hidden');
 
         try {
@@ -77,7 +71,6 @@ const App = {
             console.error("Falha ao carregar configuração inicial", e);
             this.elements.loginScreen.innerHTML = `<div class="text-center text-red-500">Falha ao carregar o sistema. Verifique sua conexão e a URL da API.</div>`;
         } finally {
-            // Esconde o loader para exibir a tela de login
             this.elements.loader.classList.add('hidden');
         }
     },
@@ -400,7 +393,7 @@ const App = {
 
 
 // ========================================================
-// VIEW MASTER (ANTIGO View-Master.html)
+// VIEW MASTER
 // ========================================================
 Object.assign(App, {
     renderMasterDashboard() {
@@ -1011,7 +1004,7 @@ Object.assign(App, {
 
 
 // ========================================================
-// VIEW ATENDENTE (ANTIGO View-Atendente.html)
+// VIEW ATENDENTE
 // ========================================================
 Object.assign(App, {
     renderAttendantSchedule(profId = null) {
@@ -1269,7 +1262,7 @@ Object.assign(App, {
 
 
 // ========================================================
-// VIEW PROFISSIONAL (ANTIGO View-Profissional.html)
+// VIEW PROFISSIONAL
 // ========================================================
 Object.assign(App, {
     renderProfessionalAgenda() {
@@ -1443,7 +1436,12 @@ Object.assign(App, {
                     try {
                         await callApi('updateAppointmentStatus', { appointmentId: id, newStatus: 'Concluído' });
                         this.showNotification('success', 'Sucesso!', 'Atendimento concluído.');
-                        await this.refreshData('professional-agenda');
+                        
+                        // Otimização aqui!
+                        const newAgendaData = await callApi('getAgendaUpdate', { profId: this.state.currentUser.id });
+                        this.state.data.agendaData = newAgendaData;
+                        this.renderProfessionalAgenda();
+
                     } catch (err) {
                         this.showNotification('error', 'Erro', err.message);
                     } finally {
@@ -1752,5 +1750,3 @@ Object.assign(App, {
 // INICIALIZAÇÃO DO APP
 // ========================================================
 document.addEventListener('DOMContentLoaded', () => App.init());
-
-
