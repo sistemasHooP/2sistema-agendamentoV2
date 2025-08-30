@@ -1,5 +1,5 @@
 // ========================================================
-// ARQUIVO: script.js (COMPLETO COM OTIMIZAÇÃO DE PERFORMANCE)
+// ARQUIVO: script.js (VERSÃO FINAL COM TODAS AS OTIMIZAÇÕES)
 // ========================================================
 
 // URL da sua API no Google Apps Script
@@ -1604,7 +1604,7 @@ Object.assign(App, {
 
         fetchAndRenderClients();
     },
-
+    
     async renderClientNotesModal(clientId, clientName, returnView) {
         this.showLoader('Buscando anotações...');
         try {
