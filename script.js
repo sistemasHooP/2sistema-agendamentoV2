@@ -1501,108 +1501,116 @@ Object.assign(App, {
     },
     
     renderProfessionalClientSearch() {
-        document.getElementById('view-title').textContent = 'Clientes Cadastrados';
-        const container = this.elements.mainContent;
-        let currentPage = 1;
-        const pageSize = 50;
+    document.getElementById('view-title').textContent = 'Clientes Cadastrados';
+    const container = this.elements.mainContent;
+    let currentPage = 1;
+    const pageSize = 50;
 
-        container.innerHTML = `
-            <div class="bg-white p-6 rounded-xl shadow-md border border-slate-200 max-w-4xl mx-auto">
-                <div class="flex flex-col md:flex-row justify-between md:items-center gap-4 mb-4">
-                    <h3 class="text-xl font-bold text-slate-800">Gerenciar Clientes</h3>
-                    <div class="flex w-full md:w-auto gap-2">
-                        <input type="text" id="searchTerm" class="form-input w-full md:w-64" placeholder="Filtrar por nome ou telefone...">
-                        <button id="addNewClientBtn" class="btn btn-primary flex-shrink-0"><i class="fa-solid fa-plus mr-2"></i>Novo</button>
-                    </div>
-                </div>
-                <div id="clientSearchResults" class="mt-6 border-t border-slate-200 pt-4 min-h-[300px]">
-                    <p class="text-slate-500 text-center">Buscando clientes...</p>
-                </div>
-                <div id="client-pagination-container" class="pt-4 border-t border-slate-200 flex justify-between items-center mt-4">
+    container.innerHTML = `
+        <div class="bg-white p-6 rounded-xl shadow-md border border-slate-200 max-w-4xl mx-auto">
+            <div class="flex flex-col md:flex-row justify-between md:items-center gap-4 mb-4">
+                <h3 class="text-xl font-bold text-slate-800">Gerenciar Clientes</h3>
+                <div class="flex w-full md:w-auto gap-2">
+                    <input type="text" id="searchTerm" class="form-input w-full md:w-64" placeholder="Filtrar por nome ou telefone...">
+                    <button id="addNewClientBtn" class="btn btn-primary flex-shrink-0"><i class="fa-solid fa-plus mr-2"></i>Novo</button>
                 </div>
             </div>
-        `;
-        const searchInput = container.querySelector('#searchTerm');
-        const resultsContainer = container.querySelector('#clientSearchResults');
-        const paginationContainer = container.querySelector('#client-pagination-container');
-        
-        const fetchAndRenderClients = async (term = '', page = 1) => {
-            resultsContainer.innerHTML = '<div class="flex justify-center items-center p-8"><i class="fa-solid fa-spinner animate-spin text-2xl text-slate-400 mr-3"></i><span class="text-slate-500">Buscando clientes...</span></div>';
-            paginationContainer.innerHTML = '';
-            currentPage = page;
+            <div id="clientSearchResults" class="mt-6 border-t border-slate-200 pt-4 min-h-[300px]">
+                <p class="text-slate-500 text-center">Buscando clientes...</p>
+            </div>
+            <div id="client-pagination-container" class="pt-4 border-t border-slate-200 flex justify-between items-center mt-4">
+            </div>
+        </div>
+    `;
+    const searchInput = container.querySelector('#searchTerm');
+    const resultsContainer = container.querySelector('#clientSearchResults');
+    const paginationContainer = container.querySelector('#client-pagination-container');
+    
+    const fetchAndRenderClients = async (term = '', page = 1) => {
+        resultsContainer.innerHTML = '<div class="flex justify-center items-center p-8"><i class="fa-solid fa-spinner animate-spin text-2xl text-slate-400 mr-3"></i><span class="text-slate-500">Buscando clientes...</span></div>';
+        paginationContainer.innerHTML = '';
+        currentPage = page;
 
-            try {
-                const response = await callApi('searchClients', { searchTerm: term, page: currentPage, pageSize: pageSize });
-                
-                if (response.success && response.clients.length > 0) {
-                    resultsContainer.innerHTML = response.clients.map(client => `
-                        <div class="p-3 border-b border-slate-100 flex justify-between items-center hover:bg-slate-50">
-                            <div>
-                                <p class="font-medium text-slate-800">${client.Nome_Completo}</p>
-                                <p class="text-sm text-slate-500">${client.Telefone_WhatsApp}</p>
-                            </div>
-                            <div class="flex gap-2">
-                                <button data-action="edit-client" data-client-id="${client.ID_Cliente}" class="btn btn-secondary !py-1 !px-3">Editar</button>
-                                <button data-action="view-notes" data-client-id="${client.ID_Cliente}" data-name="${client.Nome_Completo}" class="btn btn-secondary !py-1 !px-3">Anotações</button>
-                            </div>
+        try {
+            const response = await callApi('searchClients', { searchTerm: term, page: currentPage, pageSize: pageSize });
+            
+            if (response.success && response.clients.length > 0) {
+                resultsContainer.innerHTML = response.clients.map(client => `
+                    <div class="p-3 border-b border-slate-100 flex justify-between items-center hover:bg-slate-50">
+                        <div>
+                            <p class="font-medium text-slate-800">${client.Nome_Completo}</p>
+                            <p class="text-sm text-slate-500">${client.Telefone_WhatsApp}</p>
                         </div>
-                    `).join('');
+                        <div class="flex gap-2">
+                            <button data-action="edit-client" data-client-id="${client.ID_Cliente}" class="btn btn-secondary !py-1 !px-3">Editar</button>
+                            <button data-action="view-notes" data-client-id="${client.ID_Cliente}" data-name="${client.Nome_Completo}" class="btn btn-secondary !py-1 !px-3">Anotações</button>
+                        </div>
+                    </div>
+                `).join('');
 
-                    const totalCount = response.totalCount;
-                    const totalPages = Math.ceil(totalCount / pageSize);
-                    
-                    let paginationHtml = `<span class="text-sm text-slate-600">Página ${currentPage} de ${totalPages} (${totalCount} registros)</span>`;
-                    
-                    if (totalPages > 1) {
-                        paginationHtml += `<div class="flex gap-2">
-                            <button id="prevPageBtn" class="btn btn-secondary !px-3" ${currentPage === 1 ? 'disabled' : ''}>Anterior</button>
-                            <button id="nextPageBtn" class="btn btn-secondary !px-3" ${currentPage === totalPages ? 'disabled' : ''}>Próxima</button>
-                        </div>`;
-                    }
-                    paginationContainer.innerHTML = paginationHtml;
-
-                    if (document.getElementById('prevPageBtn')) {
-                        document.getElementById('prevPageBtn').addEventListener('click', () => fetchAndRenderClients(searchInput.value, currentPage - 1));
-                    }
-                    if (document.getElementById('nextPageBtn')) {
-                        document.getElementById('nextPageBtn').addEventListener('click', () => fetchAndRenderClients(searchInput.value, currentPage + 1));
-                    }
-
-                } else {
-                    resultsContainer.innerHTML = '<p class="text-slate-500 text-center">Nenhum cliente encontrado.</p>';
+                const totalCount = response.totalCount;
+                const totalPages = Math.ceil(totalCount / pageSize);
+                
+                let paginationHtml = `<span class="text-sm text-slate-600">Página ${currentPage} de ${totalPages} (${totalCount} registros)</span>`;
+                
+                if (totalPages > 1) {
+                    paginationHtml += `<div class="flex gap-2">
+                        <button id="prevPageBtn" class="btn btn-secondary !px-3" ${currentPage === 1 ? 'disabled' : ''}>Anterior</button>
+                        <button id="nextPageBtn" class="btn btn-secondary !px-3" ${currentPage === totalPages ? 'disabled' : ''}>Próxima</button>
+                    </div>`;
                 }
-            } catch (err) {
-                this.showNotification('error', 'Erro na Busca', err.message);
-                resultsContainer.innerHTML = '<p class="text-red-500 text-center">Ocorreu um erro ao buscar.</p>';
+                paginationContainer.innerHTML = paginationHtml;
+
+                if (document.getElementById('prevPageBtn')) {
+                    document.getElementById('prevPageBtn').addEventListener('click', () => fetchAndRenderClients(searchInput.value, currentPage - 1));
+                }
+                if (document.getElementById('nextPageBtn')) {
+                    document.getElementById('nextPageBtn').addEventListener('click', () => fetchAndRenderClients(searchInput.value, currentPage + 1));
+                }
+
+            } else {
+                resultsContainer.innerHTML = '<p class="text-slate-500 text-center">Nenhum cliente encontrado.</p>';
             }
-        };
-        
-        container.querySelector('#addNewClientBtn').addEventListener('click', () => {
-            this.renderClientForm(null, 'professional-client-search');
-        });
+        } catch (err) {
+            this.showNotification('error', 'Erro na Busca', err.message);
+            resultsContainer.innerHTML = '<p class="text-red-500 text-center">Ocorreu um erro ao buscar.</p>';
+        }
+    };
+    
+    // ========================================================
+    // A CORREÇÃO ESTÁ AQUI - Adicionando os Event Listeners de volta
+    // ========================================================
+    container.querySelector('#addNewClientBtn').addEventListener('click', () => {
+        this.renderClientForm(null, 'professional-client-search');
+    });
 
-        let searchTimeout;
-        searchInput.addEventListener('input', () => {
-            clearTimeout(searchTimeout);
-            searchTimeout = setTimeout(() => {
-                fetchAndRenderClients(searchInput.value, 1);
-            }, 300);
-        });
-        
-        resultsContainer.addEventListener('click', (e) => {
-            const button = e.target.closest('button[data-action]');
-            if (!button) return;
-            const action = button.dataset.action;
-            const clientId = button.dataset.clientId;
-            const clientName = button.dataset.name;
+    let searchTimeout;
+    searchInput.addEventListener('input', () => {
+        clearTimeout(searchTimeout);
+        searchTimeout = setTimeout(() => {
+            fetchAndRenderClients(searchInput.value, 1);
+        }, 300);
+    });
+    
+    resultsContainer.addEventListener('click', (e) => {
+        const button = e.target.closest('button[data-action]');
+        if (!button) return;
+        const action = button.dataset.action;
+        const clientId = button.dataset.clientId;
+        const clientName = button.dataset.name;
 
-            if (action === 'view-notes') {
-                this.renderClientNotesModal(clientId, clientName, 'professional-client-search');
-            } else if (action === 'edit-client') {
-                this.renderClientForm(clientId, 'professional-client-search');
-            }
-        });
+        if (action === 'view-notes') {
+            this.renderClientNotesModal(clientId, clientName, 'professional-client-search');
+        } else if (action === 'edit-client') {
+            this.renderClientForm(clientId, 'professional-client-search');
+        }
+    });
+    // ========================================================
+    // FIM DA CORREÇÃO
+    // ========================================================
 
+    fetchAndRenderClients(); // Carga inicial dos clientes
+},
         fetchAndRenderClients();
     },
     async renderClientNotesModal(clientId, clientName, returnView) {
@@ -1619,3 +1627,4 @@ Object.assign(App, {
 // INICIALIZAÇÃO DO APP
 // ========================================================
 document.addEventListener('DOMContentLoaded', () => App.init());
+
