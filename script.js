@@ -1,7 +1,47 @@
 // ========================================================
 // ARQUIVO: script.js (VERSÃO FINAL COM TODAS AS OTIMIZAÇÕES)
 // ========================================================
-
+// ========================================================
+// MAPA DE CONFIGURAÇÕES (Traduções para a interface)
+// ========================================================
+const SETTINGS_MAP = {
+    'MOSTRAR_VIDEO_PAINEL': {
+        label: 'Exibir Vídeo no Painel de Chamada',
+        description: 'Se "Ativado", o painel de chamada exibirá um vídeo do YouTube no espaço ocioso.',
+        type: 'toggle' // Tipo especial para o interruptor
+    },
+    'NOME_NEGOCIO': {
+        label: 'Nome do Negócio',
+        description: 'Este nome aparecerá na tela de login e no topo do sistema.',
+        type: 'text'
+    },
+    'LOGO_URL': {
+        label: 'URL da Logo',
+        description: 'Cole o link público (URL) da imagem que servirá como logo.',
+        type: 'text'
+    },
+    'DURACAO_PADRAO_SLOT_MINUTOS': {
+        label: 'Duração do Atendimento (minutos)',
+        description: 'Tempo padrão, em minutos, que cada atendimento ocupa na agenda.',
+        type: 'number'
+    },
+    'AGENDA_REFRESH_INTERVAL_SECONDS': {
+        label: 'Intervalo de Atualização da Agenda (segundos)',
+        description: 'De quantos em quantos segundos a agenda do profissional e atendente atualiza automaticamente.',
+        type: 'number'
+    },
+    'CALL_SCREEN_URL': {
+        label: 'URL do Painel de Chamada',
+        description: 'O link público do painel que exibe as chamadas para os clientes.',
+        type: 'text'
+    },
+    'YOUTUBE_VIDEO_ID': {
+        label: 'ID do Vídeo do YouTube',
+        description: 'O código do vídeo que aparecerá no painel. Ex: "dQw4w9WgXcQ".',
+        type: 'text'
+    }
+    // A chave 'LAST_UPDATE_TIMESTAMP' é interna do sistema e não será mostrada.
+};
 // URL da sua API no Google Apps Script
 const GAS_API_URL = "https://script.google.com/macros/s/AKfycbyn1jRZtt3Ytyn9CQN-oNrixr5zpBFKU3gKn_whuBPXE_T6uLv-wGGxpBJJMgVyIWzpOw/exec";
 
@@ -916,87 +956,123 @@ Object.assign(App, {
     },
 
     renderMasterSettings() {
-        document.getElementById('view-title').textContent = 'Configurações';
-        const container = this.elements.mainContent;
-        
-        const specialConfigs = ['MOSTRAR_VIDEO_PAINEL'];
-        const normalConfigs = this.state.data.config.filter(conf => !specialConfigs.includes(conf.Chave));
-        const videoConfig = this.state.data.config.find(conf => conf.Chave === 'MOSTRAR_VIDEO_PAINEL');
+    document.getElementById('view-title').textContent = 'Configurações';
+    const container = this.elements.mainContent;
+    
+    // Filtra as configurações para mostrar apenas as que estão no nosso mapa.
+    const configsToShow = this.state.data.config.filter(conf => SETTINGS_MAP[conf.Chave]);
 
-        const tableRows = normalConfigs.map(conf => `
+    const tableRows = configsToShow.map(conf => {
+        const mapping = SETTINGS_MAP[conf.Chave];
+        if (!mapping) return ''; // Segurança extra, ignora chaves não mapeadas
+
+        // Lógica para o interruptor (toggle)
+        if (mapping.type === 'toggle') {
+            const isChecked = conf.Valor === 'SIM';
+            return `
+                <tr class="border-b border-slate-100" data-key="${conf.Chave}">
+                    <td class="p-4 align-top">
+                        <div class="font-medium text-slate-800">${mapping.label}</div>
+                        <div class="text-xs text-slate-500 mt-1">${mapping.description}</div>
+                    </td>
+                    <td class="p-4 align-top">
+                        <label class="toggle-switch">
+                            <input type="checkbox" class="setting-toggle" ${isChecked ? 'checked' : ''}>
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </td>
+                    <td class="p-4 text-right align-top">
+                        <span class="font-medium text-sm ${isChecked ? 'text-green-600' : 'text-slate-500'}">
+                            ${isChecked ? 'Ativado' : 'Desativado'}
+                        </span>
+                    </td>
+                </tr>`;
+        }
+
+        // Lógica para campos de texto/número
+        return `
             <tr class="border-b border-slate-100" data-key="${conf.Chave}">
-                <td class="p-4 font-medium text-slate-800">${conf.Chave}</td>
-                <td class="p-4 text-slate-600"><span>${conf.Valor}</span></td>
-                <td class="p-4 text-right"><button class="btn btn-secondary !py-1 !px-3" data-action="edit">Editar</button></td>
-            </tr>`).join('');
-        
-        const videoToggleHtml = `
-            <tr class="border-b border-slate-100" data-key="MOSTRAR_VIDEO_PAINEL">
-                <td class="p-4 font-medium text-slate-800">MOSTRAR_VIDEO_PAINEL</td>
-                <td class="p-4 text-slate-600">
-                    <label class="toggle-switch">
-                        <input type="checkbox" id="video-toggle" ${videoConfig && videoConfig.Valor === 'SIM' ? 'checked' : ''}>
-                        <span class="toggle-slider"></span>
-                    </label>
+                <td class="p-4">
+                    <div class="font-medium text-slate-800">${mapping.label}</div>
+                    <div class="text-xs text-slate-500 mt-1">${mapping.description}</div>
+                </td>
+                <td class="p-4">
+                    <span class="text-slate-600">${conf.Valor}</span>
                 </td>
                 <td class="p-4 text-right">
-                    <span class="font-medium text-sm ${videoConfig && videoConfig.Valor === 'SIM' ? 'text-green-600' : 'text-slate-500'}">
-                        ${videoConfig && videoConfig.Valor === 'SIM' ? 'Ativado' : 'Desativado'}
-                    </span>
+                    <button class="btn btn-secondary !py-1 !px-3" data-action="edit">Editar</button>
                 </td>
             </tr>`;
 
-        container.innerHTML = `
-            <div class="bg-white rounded-xl shadow-md border border-slate-200">
-                <div class="p-4 border-b border-slate-200"><h3 class="text-lg font-semibold text-slate-800">Configurações Gerais</h3></div>
-                <div class="overflow-x-auto"><table class="w-full text-left">
-                    <thead class="bg-slate-50"><tr><th class="p-4 font-semibold text-slate-600 text-sm w-1/3">Chave</th><th class="p-4 font-semibold text-slate-600 text-sm">Valor</th><th class="p-4 font-semibold text-slate-600 text-sm text-right">Ações</th></tr></thead>
-                    <tbody id="settings-table-body">${videoToggleHtml}${tableRows}</tbody>
-                </table></div>
-            </div>`;
+    }).join('');
 
-        container.querySelector('#settings-table-body').addEventListener('click', async e => {
-            if (e.target.tagName !== 'BUTTON') return;
-            const row = e.target.closest('tr');
-            const key = row.dataset.key;
-            const action = e.target.dataset.action;
-            const valueCell = row.querySelector('td:nth-child(2)');
-            
-            if (action === 'edit') {
-                valueCell.innerHTML = `<input type="text" class="form-input" value="${valueCell.textContent}">`;
-                e.target.textContent = 'Salvar';
-                e.target.dataset.action = 'save';
-            } else if (action === 'save') {
-                const value = valueCell.querySelector('input').value;
-                this.showLoader('Salvando...');
-                try {
-                    await callApi('updateSetting', { key, value });
-                    this.showNotification('success', 'Sucesso!', 'Configuração salva.');
-                    await this.refreshData('master-settings');
-                } catch (err) {
-                    this.showNotification('error', 'Erro', err.message);
-                } finally {
-                    this.hideLoader();
-                }
-            }
-        });
+    container.innerHTML = `
+        <div class="bg-white rounded-xl shadow-md border border-slate-200">
+            <div class="p-4 border-b border-slate-200"><h3 class="text-lg font-semibold text-slate-800">Configurações Gerais</h3></div>
+            <div class="overflow-x-auto"><table class="w-full text-left">
+                <thead class="bg-slate-50"><tr>
+                    <th class="p-4 font-semibold text-slate-600 text-sm w-2/5">Configuração</th>
+                    <th class="p-4 font-semibold text-slate-600 text-sm">Valor</th>
+                    <th class="p-4 font-semibold text-slate-600 text-sm text-right">Ação</th>
+                </tr></thead>
+                <tbody id="settings-table-body">${tableRows}</tbody>
+            </table></div>
+        </div>`;
 
-        container.querySelector('#video-toggle').addEventListener('change', async e => {
-            const isChecked = e.target.checked;
-            const value = isChecked ? 'SIM' : 'NAO';
+    // A lógica dos event listeners continua funcionando, mas agora precisa de um para o toggle.
+    const tableBody = container.querySelector('#settings-table-body');
+
+    tableBody.addEventListener('click', async e => {
+        const button = e.target.closest('button[data-action]');
+        if (!button) return;
+
+        const row = button.closest('tr');
+        const key = row.dataset.key;
+        const action = button.dataset.action;
+        const valueCell = row.querySelector('td:nth-child(2)');
+        
+        if (action === 'edit') {
+            const currentValue = valueCell.querySelector('span').textContent;
+            valueCell.innerHTML = `<input type="text" class="form-input" value="${currentValue}">`;
+            button.textContent = 'Salvar';
+            button.dataset.action = 'save';
+            button.classList.remove('btn-secondary');
+            button.classList.add('btn-primary');
+        } else if (action === 'save') {
+            const value = valueCell.querySelector('input').value;
             this.showLoader('Salvando...');
             try {
-                await callApi('updateSetting', { key: 'MOSTRAR_VIDEO_PAINEL', value });
-                this.showNotification('success', 'Sucesso!', 'Configuração de vídeo salva.');
+                await callApi('updateSetting', { key, value });
+                this.showNotification('success', 'Sucesso!', 'Configuração salva.');
                 await this.refreshData('master-settings');
             } catch (err) {
                 this.showNotification('error', 'Erro', err.message);
             } finally {
                 this.hideLoader();
             }
-        });
-    },
+        }
+    });
 
+    tableBody.addEventListener('change', async e => {
+        if (!e.target.classList.contains('setting-toggle')) return;
+
+        const row = e.target.closest('tr');
+        const key = row.dataset.key;
+        const isChecked = e.target.checked;
+        const value = isChecked ? 'SIM' : 'NAO';
+        
+        this.showLoader('Salvando...');
+        try {
+            await callApi('updateSetting', { key, value });
+            this.showNotification('success', 'Sucesso!', 'Configuração salva.');
+            await this.refreshData('master-settings');
+        } catch (err) {
+            this.showNotification('error', 'Erro', err.message);
+        } finally {
+            this.hideLoader();
+        }
+    });
+},
     renderMasterImport() {
         document.getElementById('view-title').textContent = 'Importar Dados';
         this.elements.mainContent.innerHTML = `
@@ -1779,3 +1855,4 @@ Object.assign(App, {
 // INICIALIZAÇÃO DO APP
 // ========================================================
 document.addEventListener('DOMContentLoaded', () => App.init());
+
