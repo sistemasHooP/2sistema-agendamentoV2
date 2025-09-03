@@ -38,19 +38,12 @@ async function callApi(action, params = {}) {
 // CORE DO APLICATIVO
 // ========================================================
 
-// ALTERAÇÃO 1: 'const App' foi trocado por 'window.App' para que o Petite Vue possa acessá-lo.
-window.App = {
+const App = {
     state: { 
         currentUser: null, 
         currentView: null, 
         charts: {}, 
-        data: {
-            professionals: [],
-            services: [],
-            appointments: [],
-            config: [],
-            users: { master: [], attendant: [], professional: [] }
-        }, 
+        data: {}, 
         agendaRefreshInterval: null, 
         appointments: { currentPage: 1, pageSize: 20, totalCount: 0, filters: {} }, 
         lastUpdateTimestamp: 0,
@@ -150,14 +143,17 @@ window.App = {
             this.elements.loaderText.textContent = 'Carregando interface...';
             this.state.currentUser = loginResponse.user;
             
+            // --- ETAPA 1: CARGA RÁPIDA ---
             if (this.state.currentUser.role === 'profissional') {
                 this.state.data = await callApi('getCoreProfessionalData');
             } else {
                 this.state.data = await callApi('getCoreData');
             }
             
+            // --- ETAPA 2: LANÇAMENTO IMEDIATO ---
             this.launchApp();
 
+            // --- ETAPA 3: CARGA PESADA EM SEGUNDO PLANO ---
             this.showLoader('Buscando dados...');
             
             let defaultViewId;
@@ -165,7 +161,7 @@ window.App = {
                 const agendaData = await callApi('getAgendaUpdate', { profId: this.state.currentUser.id });
                 this.state.data.agendaData = agendaData;
                 defaultViewId = 'professional-agenda';
-            } else {
+            } else { // Master e Atendente
                 const appointments = await callApi('getRecentAndFutureAppointments');
                 const dashboardStats = await callApi('getDashboardStats');
                 this.state.data.appointments = appointments;
@@ -187,17 +183,13 @@ window.App = {
         this.elements.loginScreen.classList.add('hidden');
         this.elements.appContainer.classList.remove('hidden');
         
-        // ALTERAÇÃO 2: A chamada 'this.buildLayout()' foi removida daqui.
-        
+        this.buildLayout();
         this.attachEventListeners();
         
         const logoConfig = this.state.data.config.find(c => c.Chave === 'LOGO_URL');
         if (logoConfig && logoConfig.Valor) {
-            const sidebarLogo = document.getElementById('sidebarLogo');
-            if(sidebarLogo) {
-                sidebarLogo.src = logoConfig.Valor;
-                sidebarLogo.classList.remove('hidden');
-            }
+            this.elements.sidebarLogo.src = logoConfig.Valor;
+            this.elements.sidebarLogo.classList.remove('hidden');
         }
         
         const menu = this.getNavMenuForRole(this.state.currentUser.role);
@@ -206,13 +198,73 @@ window.App = {
         }
     },
 
-    // ALTERAÇÃO 3: A função buildLayout foi completamente REMOVIDA.
+    buildLayout() {
+        const menu = this.getNavMenuForRole(this.state.currentUser.role);
+        let navLinksHtml = menu.map(item => `<a href="#" data-view="${item.id}" class="nav-link"><i class="fa-solid ${item.icon} fa-fw w-6"></i><span>${item.label}</span></a>`).join('');
+        
+        const businessNameConfig = this.state.data.config.find(c => c.Chave === 'NOME_NEGOCIO');
+        const businessName = businessNameConfig ? businessNameConfig.Valor : 'AgendaPRO';
 
+        let titleHtml = `<h1 class="ml-3 text-2xl font-bold text-slate-800">${businessName}</h1>`;
+        
+        if (this.state.currentUser.role === 'profissional') {
+            const professionalName = this.state.currentUser.name.split(' ')[0];
+            titleHtml = `<div class="ml-3 text-left"><h1 class="text-2xl font-bold text-slate-800">Agenda</h1><p class="text-sm text-slate-500">${professionalName}</p></div>`;
+        } else if (this.state.currentUser.role === 'atendente') {
+            titleHtml = `<h1 class="ml-3 text-2xl font-bold text-slate-800">Recepção</h1>`;
+        }
+
+        if (this.state.currentUser.role === 'profissional') {
+            navLinksHtml += `
+                <a href="#" id="sidebarNewAppointmentBtn" class="nav-link bg-blue-600 text-white hover:bg-blue-700 hover:text-white mt-2">
+                    <i class="fa-solid fa-plus fa-fw w-6"></i><span>Novo Agendamento</span>
+                </a>
+            `;
+        }
+
+        this.elements.appContainer.innerHTML = `
+            <div class="h-screen flex flex-col">
+                <div class="relative flex-1 flex md:flex-row overflow-hidden">
+                    <div id="sidebar-overlay" class="fixed inset-0 bg-black/50 z-20 hidden md:hidden"></div>
+                    <aside id="sidebar" class="fixed inset-y-0 left-0 bg-white w-64 flex flex-col z-30 transform -translate-x-full md:relative md:translate-x-0 border-r border-slate-200">
+                        <div class="flex items-center justify-center h-20 border-b border-slate-200 px-4">
+                            <img id="sidebarLogo" src="" alt="Logo" class="hidden h-12 w-12 rounded-full object-contain bg-white p-1">
+                            ${titleHtml}
+                        </div>
+                        <nav class="flex-grow p-2 space-y-1">
+                            ${navLinksHtml}
+                        </nav>
+                        <div class="p-4 border-t border-slate-200 mt-auto">
+                            <button id="logout-button" class="w-full btn btn-secondary !bg-slate-100 hover:!bg-red-500 hover:!text-white">
+                                <i class="fa-solid fa-right-from-bracket mr-2"></i>Sair
+                            </button>
+                        </div>
+                    </aside>
+                    <main class="flex-1 flex flex-col w-full overflow-hidden">
+                        <header class="bg-white/80 backdrop-blur-sm border-b border-slate-200 p-4 flex justify-between items-center sticky top-0 z-10">
+                            <button id="menu-btn" class="text-slate-600 hover:text-slate-900 md:hidden"><i class="fa-solid fa-bars fa-xl"></i></button>
+                            <h2 id="view-title" class="text-xl font-bold text-slate-800"></h2>
+                            <div class="text-right">
+                                <p class="font-semibold text-slate-700">${this.state.currentUser.name}</p>
+                                <p class="text-sm text-slate-500 capitalize">${this.state.currentUser.role}</p>
+                            </div>
+                        </header>
+                        <div id="main-content" class="flex-1 p-4 md:p-6 overflow-y-auto"></div>
+                    </main>
+                </div>
+            </div>`;
+        this.elements.mainContent = document.getElementById('main-content');
+        this.elements.sidebarLogo = document.getElementById('sidebarLogo');
+    },
+    
     getNavMenuForRole(role) {
         const menus = {
             master: [ { id: 'master-dashboard', label: 'Dashboard', icon: 'fa-tachometer-alt' }, { id: 'master-appointments', label: 'Agendamentos', icon: 'fa-calendar-days' }, { id: 'master-professionals', label: 'Profissionais', icon: 'fa-user-tie' }, { id: 'master-attendants', label: 'Atendentes', icon: 'fa-users' }, { id: 'master-services', label: 'Serviços', icon: 'fa-tags' }, { id: 'master-settings', label: 'Configurações', icon: 'fa-gear' }, { id: 'master-import', label: 'Importar Dados', icon: 'fa-upload' } ],
             atendente: [ { id: 'attendant-agenda', label: 'Agenda do Dia', icon: 'fa-calendar-day' }, { id: 'attendant-schedule', label: 'Novo Agendamento', icon: 'fa-plus' } ],
-            profissional: [ { id: 'professional-agenda', label: 'Minha Agenda', icon: 'fa-calendar-check' }, { id: 'professional-client-search', label: 'Clientes Cadastrados', icon: 'fa-search' } ]
+            profissional: [ 
+                { id: 'professional-agenda', label: 'Minha Agenda', icon: 'fa-calendar-check' },
+                { id: 'professional-client-search', label: 'Clientes Cadastrados', icon: 'fa-search' }
+            ]
         };
         return menus[role] || [];
     },
@@ -220,8 +272,11 @@ window.App = {
     navigateTo(viewId, isRefresh = false) {
         if (!isRefresh && this.state.currentView === viewId) return;
         this.state.currentView = viewId;
-        
         if (this.state.agendaRefreshInterval) { clearInterval(this.state.agendaRefreshInterval); this.state.agendaRefreshInterval = null; }
+        
+        document.querySelectorAll('.nav-link').forEach(link => {
+            link.classList.toggle('active-link', link.dataset.view === viewId);
+        });
         
         const viewActions = {
             'master-dashboard': this.renderMasterDashboard, 'master-appointments': this.renderMasterAppointments,
@@ -239,7 +294,7 @@ window.App = {
         }
         
         const sidebar = document.getElementById('sidebar');
-        if (sidebar && sidebar.classList.contains('open')) {
+        if (sidebar.classList.contains('open')) {
             sidebar.classList.remove('open');
             sidebar.classList.add('-translate-x-full');
             document.getElementById('sidebar-overlay').classList.add('hidden');
@@ -276,22 +331,27 @@ window.App = {
         this.init();
     },
 
-    // ALTERAÇÃO 4: A função foi simplificada para cuidar apenas do menu mobile.
     attachEventListeners() {
-        const menuBtn = document.getElementById('menu-btn');
-        const sidebar = document.getElementById('sidebar');
-        const sidebarOverlay = document.getElementById('sidebar-overlay');
+        document.getElementById('logout-button').addEventListener('click', this.handleLogout.bind(this));
+        
+        document.getElementById('app-container').addEventListener('click', (e) => {
+            const targetLink = e.target.closest('a.nav-link');
+            if (!targetLink) return;
 
-        const toggleSidebar = () => {
-            if(sidebar) {
-                sidebar.classList.toggle('open');
-                sidebar.classList.toggle('-translate-x-full');
-            }
-            if(sidebarOverlay) {
-                sidebarOverlay.classList.toggle('hidden');
-            }
-        };
+            e.preventDefault();
 
+            if (targetLink.id === 'sidebarNewAppointmentBtn') {
+                this.renderAttendantSchedule(this.state.currentUser.id);
+                return; 
+            }
+
+            if (targetLink.dataset.view) {
+                this.navigateTo(targetLink.dataset.view);
+            }
+        });
+
+        const menuBtn = document.getElementById('menu-btn'), sidebar = document.getElementById('sidebar'), sidebarOverlay = document.getElementById('sidebar-overlay');
+        const toggleSidebar = () => { sidebar.classList.toggle('open'); sidebar.classList.toggle('-translate-x-full'); sidebarOverlay.classList.toggle('hidden'); };
         if (menuBtn) menuBtn.addEventListener('click', toggleSidebar);
         if (sidebarOverlay) sidebarOverlay.addEventListener('click', toggleSidebar);
     },
@@ -350,6 +410,7 @@ window.App = {
         document.getElementById('confirmCancelBtn').addEventListener('click', this.closeModal);
     }
 };
+
 
 // ========================================================
 // VIEW MASTER
@@ -782,11 +843,37 @@ Object.assign(App, {
         } catch (err) { this.showNotification('error', 'Erro', err.message); } finally { this.hideLoader(); }
     },
 
-    // ALTERAÇÃO 5: A função renderMasterServices foi simplificada.
     renderMasterServices() {
-        // O HTML desta view agora está no index.html e é controlado pelo Petite Vue.
-        // A única tarefa desta função é atualizar o título da página.
         document.getElementById('view-title').textContent = 'Serviços';
+        const container = this.elements.mainContent;
+        const tableRows = this.state.data.services.map(s => `
+            <tr class="border-b border-slate-100 hover:bg-slate-50">
+                <td class="p-4 font-medium text-slate-800">${s.Nome_Servico}</td>
+                <td class="p-4 text-right space-x-2">
+                    <button class="btn btn-secondary !py-1 !px-3" data-action="edit" data-name="${s.Nome_Servico}">Editar</button>
+                    <button class="btn btn-danger !py-1 !px-3" data-action="delete" data-name="${s.Nome_Servico}">Excluir</button>
+                </td>
+            </tr>`).join('');
+        container.innerHTML = `
+            <div class="bg-white rounded-xl shadow-md border border-slate-200">
+                <div class="flex justify-between items-center p-4 border-b border-slate-200">
+                    <h3 class="text-lg font-semibold text-slate-800">Gerenciar Serviços</h3>
+                    <button id="addServiceBtn" class="btn btn-primary"><i class="fa-solid fa-plus mr-2"></i> Adicionar</button>
+                </div>
+                <div class="overflow-x-auto"><table class="w-full text-left">
+                    <thead class="bg-slate-50"><tr><th class="p-4 font-semibold text-slate-600 text-sm">Nome do Serviço</th><th class="p-4 font-semibold text-slate-600 text-sm text-right">Ações</th></tr></thead>
+                    <tbody>${tableRows}</tbody>
+                </table></div>
+            </div>`;
+        container.querySelector('#addServiceBtn').addEventListener('click', () => this.renderServiceForm());
+        container.querySelector('tbody').addEventListener('click', e => {
+            if (e.target.tagName === 'BUTTON') {
+                const action = e.target.dataset.action;
+                const name = e.target.dataset.name;
+                if (action === 'edit') this.renderServiceForm(name);
+                else if (action === 'delete') this.confirmAction(`Deseja excluir o serviço "${name}"?`, () => this.handleDeleteService(name));
+            }
+        });
     },
 
     renderServiceForm(serviceName = null) {
@@ -1169,9 +1256,9 @@ Object.assign(App, {
                 try {
                     const response = await callApi('toggleAppointmentPriority', { appointmentId: id });
                     if (response.success) {
-                        await this.refreshData('attendant-agenda', true);
+                       await this.refreshData('attendant-agenda', true);
                     } else {
-                        throw new Error(response.message);
+                       throw new Error(response.message);
                     }
                 } catch (err) {
                     this.showNotification('error', 'Erro', err.message);
