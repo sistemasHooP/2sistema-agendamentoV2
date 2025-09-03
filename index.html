@@ -5,10 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Painel de Agendamento</title>
     
-    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
     
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
-    
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
@@ -17,7 +16,6 @@
         body { font-family: 'Inter', sans-serif; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
         @keyframes spin { to { transform: rotate(360deg); } }
         .animate-spin-slow { animation: spin 1.5s linear infinite; }
-        .hidden { display: none; }
         #sidebar { transition: transform 0.3s ease-in-out; }
         @media (max-width: 767px) { #sidebar.open { transform: translateX(0); } }
         .toggle-switch { position: relative; display: inline-block; width: 50px; height: 28px; }
@@ -34,31 +32,18 @@
         ::-webkit-scrollbar-track { background: #f1f5f9; }
         ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
         ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
-    </style>
 
-    <style type="text/tailwindcss">
-        @layer components {
-            .nav-link { @apply flex items-center px-4 py-3 text-slate-600 font-medium rounded-lg transition-all duration-200 hover:bg-slate-100 hover:text-blue-600; }
-            .active-link { @apply bg-blue-600 !text-white shadow-lg hover:bg-blue-700 hover:!text-white; }
-            .btn { @apply inline-flex items-center justify-center px-5 py-2.5 font-semibold rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed; }
-            .btn-primary { @apply bg-blue-600 text-white hover:bg-blue-700 focus:ring-blue-500; }
-            .btn-secondary { @apply bg-slate-200 text-slate-700 hover:bg-slate-300 focus:ring-slate-400; }
-            .btn-success { @apply bg-emerald-600 text-white hover:bg-emerald-700 focus:ring-emerald-500; }
-            .btn-danger { @apply bg-red-600 text-white hover:bg-red-700 focus:ring-red-500; }
-            .btn-icon { @apply inline-flex items-center justify-center w-9 h-9 rounded-md text-slate-500 hover:bg-slate-200 hover:text-slate-800 transition-colors duration-200; }
-            .form-label { @apply block text-sm font-medium text-slate-700 mb-1; }
-            .form-input, .form-select { @apply block w-full bg-white border border-slate-300 rounded-lg px-4 py-2.5 text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200; }
-            .status-Confirmado, .status-Ativo { @apply inline-block px-2 py-1 text-xs font-semibold text-green-800 bg-green-100 rounded-full; }
-            .status-Pendente { @apply inline-block px-2 py-1 text-xs font-semibold text-yellow-800 bg-yellow-100 rounded-full; }
-            .status-Cancelado { @apply inline-block px-2 py-1 text-xs font-semibold text-red-800 bg-red-100 rounded-full; }
-            .status-Chamado { @apply inline-block px-2 py-1 text-xs font-semibold text-blue-800 bg-blue-100 rounded-full; }
-            .status-Concluído { @apply inline-block px-2 py-1 text-xs font-semibold text-emerald-800 bg-emerald-100 rounded-full; }
-            .status-Inativo { @apply inline-block px-2 py-1 text-xs font-semibold text-slate-700 bg-slate-200 rounded-full; }
-            .status-default { @apply inline-block px-2 py-1 text-xs font-semibold text-gray-800 bg-gray-100 rounded-full; }
-        }
+        /* Classes de Status (melhor definidas aqui para garantir o carregamento) */
+        .status-Confirmado, .status-Ativo { @apply inline-block px-2 py-1 text-xs font-semibold text-green-800 bg-green-100 rounded-full; }
+        .status-Pendente { @apply inline-block px-2 py-1 text-xs font-semibold text-yellow-800 bg-yellow-100 rounded-full; }
+        .status-Cancelado { @apply inline-block px-2 py-1 text-xs font-semibold text-red-800 bg-red-100 rounded-full; }
+        .status-Chamado { @apply inline-block px-2 py-1 text-xs font-semibold text-blue-800 bg-blue-100 rounded-full; }
+        .status-Concluído { @apply inline-block px-2 py-1 text-xs font-semibold text-emerald-800 bg-emerald-100 rounded-full; }
+        .status-Inativo { @apply inline-block px-2 py-1 text-xs font-semibold text-slate-700 bg-slate-200 rounded-full; }
+        .status-default { @apply inline-block px-2 py-1 text-xs font-semibold text-gray-800 bg-gray-100 rounded-full; }
     </style>
-
 </head>
+
 <body class="bg-slate-100 text-slate-800">
 
     <div id="loader" class="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-white/80 backdrop-blur-sm hidden">
@@ -67,29 +52,29 @@
     </div>
 
     <div id="login-screen" class="flex items-center justify-center min-h-screen bg-slate-100 p-4">
-        </div>
+    </div>
 
     <div id="app-container" class="hidden"></div>
 
     <div id="modal-container" class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 hidden opacity-0 transition-opacity duration-300">
         <div id="modal-content" class="bg-white rounded-xl shadow-2xl w-full border border-slate-200 transform scale-95 transition-transform duration-300 flex flex-col max-h-[90vh]"></div>
     </div>
+
     <div id="notification-container" class="fixed top-5 right-5 z-[101] space-y-3 w-full max-w-sm"></div>
     <template id="notification-template">
-        <div class="notification-item flex items-start p-4 rounded-lg shadow-lg border bg-white">
+        <div class="notification-item flex items-start p-4 bg-white rounded-lg shadow-lg border">
             <div class="flex-shrink-0"><i class="fa-solid fa-2x"></i></div>
             <div class="ml-3 w-0 flex-1">
                 <p class="text-base font-semibold text-slate-800"></p>
                 <p class="mt-1 text-sm text-slate-600"></p>
             </div>
             <div class="ml-4 flex-shrink-0 flex">
-                <button class="inline-flex rounded-md text-slate-400 hover:text-slate-600" onclick="this.closest('.notification-item').remove()"><i class="fa-solid fa-times"></i></button>
+                <button class="inline-flex text-slate-400 bg-white rounded-md hover:text-slate-600" onclick="this.closest('.notification-item').remove()"><i class="fa-solid fa-times"></i></button>
             </div>
         </div>
     </template>
     
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    
     <script src="script.js"></script>
     
 </body>
