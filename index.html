@@ -13,6 +13,48 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 
+    <style>
+        body { 
+            font-family: 'Inter', sans-serif; 
+            -webkit-font-smoothing: antialiased; 
+            -moz-osx-font-smoothing: grayscale; 
+        }
+        @keyframes spin { 
+            to { transform: rotate(360deg); } 
+        }
+        .animate-spin-slow { 
+            animation: spin 1.5s linear infinite; 
+        }
+        .hidden { 
+            display: none; 
+        }
+        #sidebar { 
+            transition: transform 0.3s ease-in-out; 
+        }
+        @media (max-width: 767px) {
+            #sidebar.open { 
+                transform: translateX(0); 
+            }
+        }
+        .toggle-switch { position: relative; display: inline-block; width: 50px; height: 28px; }
+        .toggle-switch input { opacity: 0; width: 0; height: 0; }
+        .toggle-slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; transition: .4s; border-radius: 28px; }
+        .toggle-slider:before { position: absolute; content: ""; height: 20px; width: 20px; left: 4px; bottom: 4px; background-color: white; transition: .4s; border-radius: 50%; }
+        input:checked + .toggle-slider { background-color: #2563eb; }
+        input:checked + .toggle-slider:before { transform: translateX(22px); }
+        .priority-icon.is-priority { color: #facc15; }
+        .priority-icon:not(.is-priority) { color: #cbd5e1; }
+        @keyframes slideInRight { 
+            from { transform: translateX(100%); opacity: 0; } 
+            to { transform: translateX(0); opacity: 1; } 
+        }
+        .notification-animation { animation: slideInRight 0.5s forwards ease-out; }
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #f1f5f9; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+    </style>
+
     <style type="text/tailwindcss">
         @layer components {
             .nav-link { @apply flex items-center px-4 py-3 text-slate-600 font-medium rounded-lg transition-all duration-200 hover:bg-slate-100 hover:text-blue-600; }
@@ -34,17 +76,6 @@
             .status-default { @apply inline-block px-2 py-1 text-xs font-semibold text-gray-800 bg-gray-100 rounded-full; }
         }
     </style>
-    
-    <style>
-        body { font-family: 'Inter', sans-serif; }
-        /* Demais estilos customizados que não usam @apply */
-        @keyframes spin { to { transform: rotate(360deg); } }
-        .animate-spin-slow { animation: spin 1.5s linear infinite; }
-        #sidebar { transition: transform 0.3s ease-in-out; }
-        @media (max-width: 767px) { #sidebar.open { transform: translateX(0); } }
-        .priority-icon.is-priority { color: #facc15; }
-        .priority-icon:not(.is-priority) { color: #cbd5e1; }
-    </style>
 
 </head>
 <body class="bg-slate-100 text-slate-800">
@@ -55,29 +86,29 @@
     </div>
 
     <div id="login-screen" class="flex items-center justify-center min-h-screen bg-slate-100 p-4">
-    </div>
+        </div>
 
     <div id="app-container" class="hidden"></div>
 
     <div id="modal-container" class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 hidden opacity-0 transition-opacity duration-300">
         <div id="modal-content" class="bg-white rounded-xl shadow-2xl w-full border border-slate-200 transform scale-95 transition-transform duration-300 flex flex-col max-h-[90vh]"></div>
     </div>
-
     <div id="notification-container" class="fixed top-5 right-5 z-[101] space-y-3 w-full max-w-sm"></div>
     <template id="notification-template">
-        <div class="notification-item flex items-start p-4 bg-white rounded-lg shadow-lg border">
+        <div class="notification-item flex items-start p-4 rounded-lg shadow-lg border bg-white">
             <div class="flex-shrink-0"><i class="fa-solid fa-2x"></i></div>
             <div class="ml-3 w-0 flex-1">
                 <p class="text-base font-semibold text-slate-800"></p>
                 <p class="mt-1 text-sm text-slate-600"></p>
             </div>
             <div class="ml-4 flex-shrink-0 flex">
-                <button class="inline-flex text-slate-400 bg-white rounded-md hover:text-slate-600" onclick="this.closest('.notification-item').remove()"><i class="fa-solid fa-times"></i></button>
+                <button class="inline-flex rounded-md text-slate-400 hover:text-slate-600" onclick="this.closest('.notification-item').remove()"><i class="fa-solid fa-times"></i></button>
             </div>
         </div>
     </template>
     
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
     <script src="script.js"></script>
     
 </body>
