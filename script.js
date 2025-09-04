@@ -1273,97 +1273,116 @@ Object.assign(App, {
     },
     
     renderAttendantAgenda() {
-        document.getElementById('view-title').textContent = 'Agenda do Dia';
-        const container = this.elements.mainContent;
-        if (!this.state.data.appointments) {
-            container.innerHTML = `<div class="flex justify-center items-center p-8"><i class="fa-solid fa-spinner animate-spin text-2xl text-slate-400 mr-3"></i><span class="text-slate-500">Carregando agendamentos...</span></div>`;
-            return;
-        }
-        const today = new Date();
-        const todayStr = new Date(today.setMinutes(today.getMinutes() - today.getTimezoneOffset())).toISOString().split('T')[0];
-        const todaysAppointments = this.state.data.appointments.filter(a => a.Data === todayStr).sort((a, b) => parseInt(a.Numero_Ficha, 10) - parseInt(b.Numero_Ficha, 10));
-        
-        const agendaItems = todaysAppointments.length > 0 ? todaysAppointments.map(appt => {
-            const prof = this.state.data.professionals.find(p => p.ID_Profissional === appt.ID_Profissional);
-            const canEditOrDelete = appt.Status === 'Confirmado' || appt.Status === 'Pendente';
-            const isPriority = appt.Prioridade === 'SIM';
-            return `
-            <div class="p-3 border-l-4 border-${{Confirmado:'green',Pendente:'yellow',Concluído:'blue',Cancelado:'red',Chamado:'purple'}[appt.Status] || 'slate'}-400 rounded-lg flex items-center justify-between gap-4 bg-white shadow-sm">
-                <div class="flex items-center gap-3 flex-grow">
-                    <div class="font-bold text-slate-800 text-lg bg-slate-100 px-3 py-1 rounded-md">Ficha ${String(appt.Numero_Ficha || '-').padStart(3, '0')}</div>
-                    <div>
-                        <div class="font-medium text-slate-700">${appt.Nome_Cliente}</div>
-                        <div class="text-sm text-slate-500">com ${prof ? prof.Nome_Completo : 'N/A'}</div>
-                    </div>
-                </div>
-                <div class="flex items-center gap-2">
-                    <span class="status-${appt.Status || 'default'}">${appt.Status}</span>
-                    <button data-action="toggle-priority" data-id="${appt.ID_Agendamento}" class="btn-icon" title="Marcar como Prioridade">
-                        <i class="fa-solid fa-star priority-icon ${isPriority ? 'is-priority' : ''}"></i>
-                    </button>
-                    <button data-action="edit" data-id="${appt.ID_Agendamento}" class="btn btn-secondary !p-2" title="Editar" ${!canEditOrDelete ? 'disabled' : ''}><i class="fa-solid fa-pencil"></i></button>
-                    <button data-action="delete" data-id="${appt.ID_Agendamento}" class="btn btn-danger !p-2" title="Excluir" ${!canEditOrDelete ? 'disabled' : ''}><i class="fa-solid fa-trash"></i></button>
-                </div>
-            </div>`;
-        }).join('') : `<div class="text-center p-8"><p class="text-slate-500">Nenhum agendamento para hoje.</p></div>`;
-
-        container.innerHTML = `
-            <div class="bg-white p-4 sm:p-6 rounded-xl shadow-md border border-slate-200">
-                <div class="flex justify-between items-center mb-6">
-                    <h3 class="text-xl font-bold text-slate-800">Agenda de Hoje</h3>
-                    <div class="text-slate-600 font-medium bg-slate-100 px-3 py-1 rounded-lg">${new Date().toLocaleDateString('pt-BR')}</div>
-                </div>
-                <div id="attendant-agenda-items" class="space-y-3">${agendaItems}</div>
-            </div>`;
-        
-        container.querySelector('#attendant-agenda-items').addEventListener('click', async e => {
-            const button = e.target.closest('button[data-id]');
-            if (!button) return;
-            const id = button.dataset.id;
-            const action = button.dataset.action;
-
-            if (action === 'edit') {
-                this.renderAppointmentEditForm(id, 'attendant-agenda');
-            } else if (action === 'delete') {
-                this.confirmAction('Tem certeza que deseja excluir este agendamento?', () => this.handleDeleteAppointment(id, 'attendant-agenda'));
-            } else if (action === 'toggle-priority') {
-                button.disabled = true;
-                try {
-                    const response = await callApi('toggleAppointmentPriority', { appointmentId: id });
-                    if (response.success) {
-                       await this.refreshData('attendant-agenda', true);
-                    } else {
-                       throw new Error(response.message);
-                    }
-                } catch (err) {
-                    this.showNotification('error', 'Erro', err.message);
-                    button.disabled = false;
-                }
-            }
-        });
-
-        const checkForUpdates = async () => {
-            if (this.state.currentView !== 'attendant-agenda') return;
-            try {
-                const latestUpdate = await callApi('getLatestUpdateTimestamp');
-                if (latestUpdate > this.state.lastUpdateTimestamp) {
-                    this.state.lastUpdateTimestamp = latestUpdate;
-                    await this.refreshData('attendant-agenda', true);
-                }
-            } catch (e) {
-                console.error("Falha ao verificar atualizações na agenda do atendente:", e);
-            }
-        };
-
-        const intervalConfig = this.state.data.config.find(c => c.Chave === 'AGENDA_REFRESH_INTERVAL_SECONDS');
-        const intervalSeconds = intervalConfig ? parseInt(intervalConfig.Valor, 10) : 15;
-        const intervalMilliseconds = (isNaN(intervalSeconds) || intervalSeconds <= 0) ? 15000 : intervalSeconds * 1000;
-
-        this.state.agendaRefreshInterval = setInterval(checkForUpdates, intervalMilliseconds);
+    document.getElementById('view-title').textContent = 'Agenda do Dia';
+    const container = this.elements.mainContent;
+    if (!this.state.data.appointments) {
+        container.innerHTML = `<div class="flex justify-center items-center p-8"><i class="fa-solid fa-spinner animate-spin text-2xl text-slate-400 mr-3"></i><span class="text-slate-500">Carregando agendamentos...</span></div>`;
+        return;
     }
-});
+    const today = new Date();
+    const todayStr = new Date(today.setMinutes(today.getMinutes() - today.getTimezoneOffset())).toISOString().split('T')[0];
+    const todaysAppointments = this.state.data.appointments.filter(a => a.Data === todayStr).sort((a, b) => parseInt(a.Numero_Ficha, 10) - parseInt(b.Numero_Ficha, 10));
+    
+    const agendaItems = todaysAppointments.length > 0 ? todaysAppointments.map(appt => {
+        const prof = this.state.data.professionals.find(p => p.ID_Profissional === appt.ID_Profissional);
+        const canEditOrDelete = appt.Status === 'Confirmado' || appt.Status === 'Pendente';
+        const isPriority = appt.Prioridade === 'SIM';
+        return `
+        <div class="p-3 border-l-4 border-${{Confirmado:'green',Pendente:'yellow',Concluído:'blue',Cancelado:'red',Chamado:'purple'}[appt.Status] || 'slate'}-400 rounded-lg flex items-center justify-between gap-4 bg-white shadow-sm">
+            <div class="flex items-center gap-3 flex-grow">
+                <div class="font-bold text-slate-800 text-lg bg-slate-100 px-3 py-1 rounded-md">Ficha ${String(appt.Numero_Ficha || '-').padStart(3, '0')}</div>
+                <div>
+                    <div class="font-medium text-slate-700">${appt.Nome_Cliente}</div>
+                    <div class="text-sm text-slate-500">com ${prof ? prof.Nome_Completo : 'N/A'}</div>
+                </div>
+            </div>
+            <div class="flex items-center gap-2">
+                <span class="status-${appt.Status || 'default'}">${appt.Status}</span>
+                <button data-action="toggle-priority" data-id="${appt.ID_Agendamento}" class="btn-icon" title="Marcar como Prioridade">
+                    <i class="fa-solid fa-star priority-icon ${isPriority ? 'is-priority' : ''}"></i>
+                </button>
+                <button data-action="edit" data-id="${appt.ID_Agendamento}" class="btn btn-secondary !p-2" title="Editar" ${!canEditOrDelete ? 'disabled' : ''}><i class="fa-solid fa-pencil"></i></button>
+                <button data-action="delete" data-id="${appt.ID_Agendamento}" class="btn btn-danger !p-2" title="Excluir" ${!canEditOrDelete ? 'disabled' : ''}><i class="fa-solid fa-trash"></i></button>
+            </div>
+        </div>`;
+    }).join('') : `<div class="text-center p-8"><p class="text-slate-500">Nenhum agendamento para hoje.</p></div>`;
 
+    container.innerHTML = `
+        <div class="bg-white p-4 sm:p-6 rounded-xl shadow-md border border-slate-200">
+            <div class="flex justify-between items-center mb-6">
+                <h3 class="text-xl font-bold text-slate-800">Agenda de Hoje</h3>
+                <div class="text-slate-600 font-medium bg-slate-100 px-3 py-1 rounded-lg">${new Date().toLocaleDateString('pt-BR')}</div>
+            </div>
+            <div id="attendant-agenda-items" class="space-y-3">${agendaItems}</div>
+        </div>`;
+    
+    container.querySelector('#attendant-agenda-items').addEventListener('click', async e => {
+        const button = e.target.closest('button[data-id]');
+        if (!button) return;
+        const id = button.dataset.id;
+        const action = button.dataset.action;
 
+        if (action === 'edit') {
+            this.renderAppointmentEditForm(id, 'attendant-agenda');
+        } else if (action === 'delete') {
+            this.confirmAction('Tem certeza que deseja excluir este agendamento?', () => this.handleDeleteAppointment(id, 'attendant-agenda'));
+        
+        // ================== INÍCIO DA MUDANÇA ==================
+        } else if (action === 'toggle-priority') {
+            button.disabled = true; // Desabilita o botão para evitar cliques múltiplos
+
+            // --- ATUALIZAÇÃO OTIMISTA ---
+            // 1. Mude a interface instantaneamente
+            const icon = button.querySelector('.priority-icon');
+            const wasPriority = icon.classList.contains('is-priority');
+            icon.classList.toggle('is-priority');
+
+            try {
+                // 2. Envie a requisição para o servidor em segundo plano
+                const response = await callApi('toggleAppointmentPriority', { appointmentId: id });
+                if (!response.success) {
+                    throw new Error(response.message);
+                }
+                // Sucesso! O servidor confirmou. Não precisamos fazer nada na tela,
+                // pois ela já foi atualizada. Apenas atualizamos o nosso estado interno.
+                const appointment = this.state.data.appointments.find(a => a.ID_Agendamento === id);
+                if (appointment) {
+                    appointment.Prioridade = wasPriority ? '' : 'SIM';
+                }
+            } catch (err) {
+                // 3. Se deu erro, desfaça a mudança na interface e notifique o usuário
+                this.showNotification('error', 'Erro', 'Não foi possível alterar a prioridade.');
+                icon.classList.toggle('is-priority'); // Reverte a mudança visual
+            } finally {
+                // 4. Reabilite o botão, seja em caso de sucesso ou erro.
+                button.disabled = false;
+            }
+        }
+        // =================== FIM DA MUDANÇA ===================
+    });
+
+    const checkForUpdates = async () => {
+        if (this.state.currentView !== 'attendant-agenda') return;
+        try {
+            const latestUpdate = await callApi('getLatestUpdateTimestamp');
+            if (latestUpdate > this.state.lastUpdateTimestamp) {
+                this.state.lastUpdateTimestamp = latestUpdate;
+                await this.refreshData('attendant-agenda', true);
+            }
+        } catch (e) {
+            console.error("Falha ao verificar atualizações na agenda do atendente:", e);
+        }
+    };
+
+    const intervalConfig = this.state.data.config.find(c => c.Chave === 'AGENDA_REFRESH_INTERVAL_SECONDS');
+    const intervalSeconds = intervalConfig ? parseInt(intervalConfig.Valor, 10) : 15;
+    const intervalMilliseconds = (isNaN(intervalSeconds) || intervalSeconds <= 0) ? 15000 : intervalSeconds * 1000;
+
+    // Limpa o intervalo anterior para não ter múltiplos rodando
+    if (this.state.agendaRefreshInterval) clearInterval(this.state.agendaRefreshInterval);
+    this.state.agendaRefreshInterval = setInterval(checkForUpdates, intervalMilliseconds);
+},
+    
 // ========================================================
 // VIEW PROFISSIONAL
 // ========================================================
@@ -1854,5 +1873,6 @@ Object.assign(App, {
 // INICIALIZAÇÃO DO APP
 // ========================================================
 document.addEventListener('DOMContentLoaded', () => App.init());
+
 
 
