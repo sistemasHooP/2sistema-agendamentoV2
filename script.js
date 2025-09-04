@@ -54,7 +54,8 @@ const GAS_API_URL = "https://script.google.com/macros/s/AKfycbyn1jRZtt3Ytyn9CQN-
 async function callApi(action, params = {}) {
     try {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 30000); // Timeout aumentado para 30s para ações demoradas
+        // Timeout aumentado para 30s para ações demoradas como o backup
+        const timeoutId = setTimeout(() => controller.abort(), 30000); 
 
         const response = await fetch(GAS_API_URL, {
             method: 'POST',
@@ -261,7 +262,6 @@ const App = {
                 </a>`;
         }
         
-        // --- NOVO: Botão de Ajuda Flutuante ---
         const isHelpUser = ['atendente', 'profissional'].includes(this.state.currentUser.role);
         const helpButtonHtml = isHelpUser ? `
             <button id="help-fab" class="fixed bottom-6 right-6 z-40 h-14 w-14 rounded-full bg-blue-600 text-white shadow-lg hover:bg-blue-700 transition-transform duration-200 hover:scale-110 flex items-center justify-center">
@@ -391,11 +391,10 @@ const App = {
                 }
             }
             
-            // --- NOVO: Event listener para o botão de ajuda ---
             const helpButton = e.target.closest('#help-fab');
             if (helpButton) {
                 const helpConfig = this.state.data.config.find(c => c.Chave === 'HELP_MESSAGE');
-                const helpMessage = helpConfig ? helpConfig.Valor.replace(/\n/g, '<br>') : 'Nenhuma mensagem de ajuda configurada.';
+                const helpMessage = helpConfig && helpConfig.Valor ? helpConfig.Valor.replace(/\n/g, '<br>') : 'Nenhuma mensagem de ajuda configurada.';
                 this.openModal('Ajuda Rápida', `<div class="prose prose-slate max-w-none">${helpMessage}</div>`);
             }
         });
@@ -966,90 +965,137 @@ Object.assign(App, {
     },
 
     renderMasterSettings() {
-    document.getElementById('view-title').textContent = 'Configurações';
-    const container = this.elements.mainContent;
-    
-    // Filtra as configurações para mostrar apenas as que estão no nosso mapa.
-    const configsToShow = this.state.data.config.filter(conf => SETTINGS_MAP[conf.Chave]);
+        document.getElementById('view-title').textContent = 'Configurações';
+        const container = this.elements.mainContent;
 
-    const tableRows = configsToShow.map(conf => {
-        const mapping = SETTINGS_MAP[conf.Chave];
-        if (!mapping) return ''; // Segurança extra, ignora chaves não mapeadas
+        const configsToShow = this.state.data.config.filter(conf => SETTINGS_MAP[conf.Chave]);
+        const helpMessageConfig = configsToShow.find(c => c.Chave === 'HELP_MESSAGE');
+        const generalConfigs = configsToShow.filter(c => c.Chave !== 'HELP_MESSAGE');
 
-        // Lógica para o interruptor (toggle)
-        if (mapping.type === 'toggle') {
-            const isChecked = conf.Valor === 'SIM';
+        const tableRows = generalConfigs.map(conf => {
+            const mapping = SETTINGS_MAP[conf.Chave];
+            if (!mapping) return '';
+
+            if (mapping.type === 'toggle') {
+                const isChecked = conf.Valor === 'SIM';
+                return `
+                    <tr class="border-b border-slate-100" data-key="${conf.Chave}">
+                        <td class="p-4 align-top">
+                            <div class="font-medium text-slate-800">${mapping.label}</div>
+                            <div class="text-xs text-slate-500 mt-1">${mapping.description}</div>
+                        </td>
+                        <td class="p-4 align-top">
+                            <label class="toggle-switch">
+                                <input type="checkbox" class="setting-toggle" ${isChecked ? 'checked' : ''}>
+                                <span class="toggle-slider"></span>
+                            </label>
+                        </td>
+                        <td class="p-4 text-right align-top">
+                            <span class="font-medium text-sm ${isChecked ? 'text-green-600' : 'text-slate-500'}">
+                                ${isChecked ? 'Ativado' : 'Desativado'}
+                            </span>
+                        </td>
+                    </tr>`;
+            }
+
             return `
                 <tr class="border-b border-slate-100" data-key="${conf.Chave}">
-                    <td class="p-4 align-top">
+                    <td class="p-4">
                         <div class="font-medium text-slate-800">${mapping.label}</div>
                         <div class="text-xs text-slate-500 mt-1">${mapping.description}</div>
                     </td>
-                    <td class="p-4 align-top">
-                        <label class="toggle-switch">
-                            <input type="checkbox" class="setting-toggle" ${isChecked ? 'checked' : ''}>
-                            <span class="toggle-slider"></span>
-                        </label>
+                    <td class="p-4">
+                        <span class="text-slate-600">${conf.Valor}</span>
                     </td>
-                    <td class="p-4 text-right align-top">
-                        <span class="font-medium text-sm ${isChecked ? 'text-green-600' : 'text-slate-500'}">
-                            ${isChecked ? 'Ativado' : 'Desativado'}
-                        </span>
+                    <td class="p-4 text-right">
+                        <button class="btn btn-secondary !py-1 !px-3" data-action="edit">Editar</button>
                     </td>
                 </tr>`;
-        }
+        }).join('');
 
-        // Lógica para campos de texto/número
-        return `
-            <tr class="border-b border-slate-100" data-key="${conf.Chave}">
-                <td class="p-4">
-                    <div class="font-medium text-slate-800">${mapping.label}</div>
-                    <div class="text-xs text-slate-500 mt-1">${mapping.description}</div>
-                </td>
-                <td class="p-4">
-                    <span class="text-slate-600">${conf.Valor}</span>
-                </td>
-                <td class="p-4 text-right">
-                    <button class="btn btn-secondary !py-1 !px-3" data-action="edit">Editar</button>
-                </td>
-            </tr>`;
+        container.innerHTML = `
+            <div class="space-y-6">
+                <div class="bg-white rounded-xl shadow-md border border-slate-200">
+                    <div class="p-4 border-b border-slate-200"><h3 class="text-lg font-semibold text-slate-800">Configurações Gerais</h3></div>
+                    <div class="overflow-x-auto"><table class="w-full text-left">
+                        <thead class="bg-slate-50"><tr>
+                            <th class="p-4 font-semibold text-slate-600 text-sm w-2/5">Configuração</th>
+                            <th class="p-4 font-semibold text-slate-600 text-sm">Valor</th>
+                            <th class="p-4 font-semibold text-slate-600 text-sm text-right">Ação</th>
+                        </tr></thead>
+                        <tbody id="settings-table-body">${tableRows}</tbody>
+                    </table></div>
+                </div>
 
-    }).join('');
+                <div class="bg-white rounded-xl shadow-md border border-slate-200">
+                    <div class="p-4 border-b border-slate-200">
+                        <h3 class="text-lg font-semibold text-slate-800">${SETTINGS_MAP['HELP_MESSAGE'].label}</h3>
+                        <p class="text-sm text-slate-500 mt-1">${SETTINGS_MAP['HELP_MESSAGE'].description}</p>
+                    </div>
+                    <div class="p-4">
+                        <textarea id="helpMessageText" class="form-input w-full" rows="6">${helpMessageConfig ? helpMessageConfig.Valor : ''}</textarea>
+                    </div>
+                    <div class="p-4 border-t border-slate-200 bg-slate-50 text-right">
+                        <button id="saveHelpMessageBtn" class="btn btn-primary">Salvar Mensagem de Ajuda</button>
+                    </div>
+                </div>
 
-    container.innerHTML = `
-        <div class="bg-white rounded-xl shadow-md border border-slate-200">
-            <div class="p-4 border-b border-slate-200"><h3 class="text-lg font-semibold text-slate-800">Configurações Gerais</h3></div>
-            <div class="overflow-x-auto"><table class="w-full text-left">
-                <thead class="bg-slate-50"><tr>
-                    <th class="p-4 font-semibold text-slate-600 text-sm w-2/5">Configuração</th>
-                    <th class="p-4 font-semibold text-slate-600 text-sm">Valor</th>
-                    <th class="p-4 font-semibold text-slate-600 text-sm text-right">Ação</th>
-                </tr></thead>
-                <tbody id="settings-table-body">${tableRows}</tbody>
-            </table></div>
-        </div>`;
+                <div class="bg-white rounded-xl shadow-md border border-red-200">
+                    <div class="p-4 border-b border-red-200">
+                        <h3 class="text-lg font-semibold text-red-800">Manutenção do Sistema</h3>
+                        <p class="text-sm text-slate-500 mt-1">Ações perigosas que afetam os dados do sistema.</p>
+                    </div>
+                    <div class="p-4 flex justify-between items-center">
+                        <div>
+                            <p class="font-medium text-slate-700">Arquivar e Limpar Agendamentos</p>
+                            <p class="text-sm text-slate-500">Move todos os agendamentos para uma nova aba de backup e limpa a aba atual para melhorar a performance.</p>
+                        </div>
+                        <button id="archiveBtn" class="btn btn-danger"><i class="fa-solid fa-archive mr-2"></i>Arquivar Agora</button>
+                    </div>
+                </div>
+            </div>`;
 
-    // A lógica dos event listeners continua funcionando, mas agora precisa de um para o toggle.
-    const tableBody = container.querySelector('#settings-table-body');
+        const tableBody = container.querySelector('#settings-table-body');
 
-    tableBody.addEventListener('click', async e => {
-        const button = e.target.closest('button[data-action]');
-        if (!button) return;
+        tableBody.addEventListener('click', async e => {
+            const button = e.target.closest('button[data-action]');
+            if (!button) return;
 
-        const row = button.closest('tr');
-        const key = row.dataset.key;
-        const action = button.dataset.action;
-        const valueCell = row.querySelector('td:nth-child(2)');
-        
-        if (action === 'edit') {
-            const currentValue = valueCell.querySelector('span').textContent;
-            valueCell.innerHTML = `<input type="text" class="form-input" value="${currentValue}">`;
-            button.textContent = 'Salvar';
-            button.dataset.action = 'save';
-            button.classList.remove('btn-secondary');
-            button.classList.add('btn-primary');
-        } else if (action === 'save') {
-            const value = valueCell.querySelector('input').value;
+            const row = button.closest('tr');
+            const key = row.dataset.key;
+            const action = button.dataset.action;
+            const valueCell = row.querySelector('td:nth-child(2)');
+            
+            if (action === 'edit') {
+                const currentValue = valueCell.querySelector('span').textContent;
+                valueCell.innerHTML = `<input type="text" class="form-input" value="${currentValue}">`;
+                button.textContent = 'Salvar';
+                button.dataset.action = 'save';
+                button.classList.remove('btn-secondary');
+                button.classList.add('btn-primary');
+            } else if (action === 'save') {
+                const value = valueCell.querySelector('input').value;
+                this.showLoader('Salvando...');
+                try {
+                    await callApi('updateSetting', { key, value });
+                    this.showNotification('success', 'Sucesso!', 'Configuração salva.');
+                    await this.refreshData('master-settings');
+                } catch (err) {
+                    this.showNotification('error', 'Erro', err.message);
+                } finally {
+                    this.hideLoader();
+                }
+            }
+        });
+
+        tableBody.addEventListener('change', async e => {
+            if (!e.target.classList.contains('setting-toggle')) return;
+
+            const row = e.target.closest('tr');
+            const key = row.dataset.key;
+            const isChecked = e.target.checked;
+            const value = isChecked ? 'SIM' : 'NAO';
+            
             this.showLoader('Salvando...');
             try {
                 await callApi('updateSetting', { key, value });
@@ -1060,29 +1106,39 @@ Object.assign(App, {
             } finally {
                 this.hideLoader();
             }
-        }
-    });
-
-    tableBody.addEventListener('change', async e => {
-        if (!e.target.classList.contains('setting-toggle')) return;
-
-        const row = e.target.closest('tr');
-        const key = row.dataset.key;
-        const isChecked = e.target.checked;
-        const value = isChecked ? 'SIM' : 'NAO';
+        });
         
-        this.showLoader('Salvando...');
-        try {
-            await callApi('updateSetting', { key, value });
-            this.showNotification('success', 'Sucesso!', 'Configuração salva.');
-            await this.refreshData('master-settings');
-        } catch (err) {
-            this.showNotification('error', 'Erro', err.message);
-        } finally {
-            this.hideLoader();
-        }
-    });
-},
+        document.getElementById('saveHelpMessageBtn').addEventListener('click', async () => {
+            const value = document.getElementById('helpMessageText').value;
+            this.showLoader('Salvando...');
+            try {
+                await callApi('updateSetting', { key: 'HELP_MESSAGE', value });
+                this.showNotification('success', 'Sucesso!', 'Mensagem de ajuda salva.');
+                await this.refreshData('master-settings');
+            } catch (err) {
+                this.showNotification('error', 'Erro', err.message);
+            } finally {
+                this.hideLoader();
+            }
+        });
+
+        document.getElementById('archiveBtn').addEventListener('click', () => {
+            const message = "Você tem certeza? Esta ação moverá TODOS os agendamentos da aba principal para uma nova aba de backup. A aba 'Agendamentos' ficará vazia. Esta ação não pode ser desfeita.";
+            this.confirmAction(message, async () => {
+                this.showLoader('Arquivando... Isso pode levar alguns minutos.');
+                try {
+                    const response = await callApi('archiveAndClearAppointments');
+                    this.showNotification('success', 'Processo Concluído', response.message);
+                    await this.refreshData('master-dashboard');
+                } catch (err) {
+                    this.showNotification('error', 'Erro ao Arquivar', err.message);
+                } finally {
+                    this.hideLoader();
+                }
+            });
+        });
+    },
+
     renderMasterImport() {
         document.getElementById('view-title').textContent = 'Importar Dados';
         this.elements.mainContent.innerHTML = `
@@ -1284,105 +1340,107 @@ Object.assign(App, {
     },
     
     renderAttendantAgenda() {
-    document.getElementById('view-title').textContent = 'Agenda do Dia';
-    const container = this.elements.mainContent;
-    if (!this.state.data.appointments) {
-        container.innerHTML = `<div class="flex justify-center items-center p-8"><i class="fa-solid fa-spinner animate-spin text-2xl text-slate-400 mr-3"></i><span class="text-slate-500">Carregando agendamentos...</span></div>`;
-        return;
-    }
-    const today = new Date();
-    const todayStr = new Date(today.setMinutes(today.getMinutes() - today.getTimezoneOffset())).toISOString().split('T')[0];
-    const todaysAppointments = this.state.data.appointments.filter(a => a.Data === todayStr).sort((a, b) => parseInt(a.Numero_Ficha, 10) - parseInt(b.Numero_Ficha, 10));
-    
-    const agendaItems = todaysAppointments.length > 0 ? todaysAppointments.map(appt => {
-        const prof = this.state.data.professionals.find(p => p.ID_Profissional === appt.ID_Profissional);
-        const canEditOrDelete = appt.Status === 'Confirmado' || appt.Status === 'Pendente';
-        const isPriority = appt.Prioridade === 'SIM';
-        return `
-        <div class="p-3 border-l-4 border-${{Confirmado:'green',Pendente:'yellow',Concluído:'blue',Cancelado:'red',Chamado:'purple'}[appt.Status] || 'slate'}-400 rounded-lg flex items-center justify-between gap-4 bg-white shadow-sm">
-            <div class="flex items-center gap-3 flex-grow">
-                <div class="font-bold text-slate-800 text-lg bg-slate-100 px-3 py-1 rounded-md">Ficha ${String(appt.Numero_Ficha || '-').padStart(3, '0')}</div>
-                <div>
-                    <div class="font-medium text-slate-700">${appt.Nome_Cliente}</div>
-                    <div class="text-sm text-slate-500">com ${prof ? prof.Nome_Completo : 'N/A'}</div>
+        document.getElementById('view-title').textContent = 'Agenda do Dia';
+        const container = this.elements.mainContent;
+        if (!this.state.data.appointments) {
+            container.innerHTML = `<div class="flex justify-center items-center p-8"><i class="fa-solid fa-spinner animate-spin text-2xl text-slate-400 mr-3"></i><span class="text-slate-500">Carregando agendamentos...</span></div>`;
+            return;
+        }
+        const today = new Date();
+        const todayStr = new Date(today.setMinutes(today.getMinutes() - today.getTimezoneOffset())).toISOString().split('T')[0];
+        const todaysAppointments = this.state.data.appointments.filter(a => a.Data === todayStr).sort((a, b) => parseInt(a.Numero_Ficha, 10) - parseInt(b.Numero_Ficha, 10));
+        
+        const agendaItems = todaysAppointments.length > 0 ? todaysAppointments.map(appt => {
+            const prof = this.state.data.professionals.find(p => p.ID_Profissional === appt.ID_Profissional);
+            const canEditOrDelete = appt.Status === 'Confirmado' || appt.Status === 'Pendente';
+            const isPriority = appt.Prioridade === 'SIM';
+            return `
+            <div class="p-3 border-l-4 border-${{Confirmado:'green',Pendente:'yellow',Concluído:'blue',Cancelado:'red',Chamado:'purple'}[appt.Status] || 'slate'}-400 rounded-lg flex items-center justify-between gap-4 bg-white shadow-sm">
+                <div class="flex items-center gap-3 flex-grow">
+                    <div class="font-bold text-slate-800 text-lg bg-slate-100 px-3 py-1 rounded-md">Ficha ${String(appt.Numero_Ficha || '-').padStart(3, '0')}</div>
+                    <div>
+                        <div class="font-medium text-slate-700">${appt.Nome_Cliente}</div>
+                        <div class="text-sm text-slate-500">com ${prof ? prof.Nome_Completo : 'N/A'}</div>
+                    </div>
                 </div>
-            </div>
-            <div class="flex items-center gap-2">
-                <span class="status-${appt.Status || 'default'}">${appt.Status}</span>
-                <button data-action="toggle-priority" data-id="${appt.ID_Agendamento}" class="btn-icon" title="Marcar como Prioridade">
-                    <i class="fa-solid fa-star priority-icon ${isPriority ? 'is-priority' : ''}"></i>
-                </button>
-                <button data-action="edit" data-id="${appt.ID_Agendamento}" class="btn btn-secondary !p-2" title="Editar" ${!canEditOrDelete ? 'disabled' : ''}><i class="fa-solid fa-pencil"></i></button>
-                <button data-action="delete" data-id="${appt.ID_Agendamento}" class="btn btn-danger !p-2" title="Excluir" ${!canEditOrDelete ? 'disabled' : ''}><i class="fa-solid fa-trash"></i></button>
-            </div>
-        </div>`;
-    }).join('') : `<div class="text-center p-8"><p class="text-slate-500">Nenhum agendamento para hoje.</p></div>`;
+                <div class="flex items-center gap-2">
+                    <span class="status-${appt.Status || 'default'}">${appt.Status}</span>
+                    <button data-action="toggle-priority" data-id="${appt.ID_Agendamento}" class="btn-icon" title="Marcar como Prioridade">
+                        <i class="fa-solid fa-star priority-icon ${isPriority ? 'is-priority' : ''}"></i>
+                    </button>
+                    <button data-action="edit" data-id="${appt.ID_Agendamento}" class="btn btn-secondary !p-2" title="Editar" ${!canEditOrDelete ? 'disabled' : ''}><i class="fa-solid fa-pencil"></i></button>
+                    <button data-action="delete" data-id="${appt.ID_Agendamento}" class="btn btn-danger !p-2" title="Excluir" ${!canEditOrDelete ? 'disabled' : ''}><i class="fa-solid fa-trash"></i></button>
+                </div>
+            </div>`;
+        }).join('') : `<div class="text-center p-8"><p class="text-slate-500">Nenhum agendamento para hoje.</p></div>`;
 
-    container.innerHTML = `
-        <div class="bg-white p-4 sm:p-6 rounded-xl shadow-md border border-slate-200">
-            <div class="flex justify-between items-center mb-6">
-                <h3 class="text-xl font-bold text-slate-800">Agenda de Hoje</h3>
-                <div class="text-slate-600 font-medium bg-slate-100 px-3 py-1 rounded-lg">${new Date().toLocaleDateString('pt-BR')}</div>
-            </div>
-            <div id="attendant-agenda-items" class="space-y-3">${agendaItems}</div>
-        </div>`;
-    
-    container.querySelector('#attendant-agenda-items').addEventListener('click', async e => {
-        const button = e.target.closest('button[data-id]');
-        if (!button) return;
-        const id = button.dataset.id;
-        const action = button.dataset.action;
+        container.innerHTML = `
+            <div class="bg-white p-4 sm:p-6 rounded-xl shadow-md border border-slate-200">
+                <div class="flex justify-between items-center mb-6">
+                    <h3 class="text-xl font-bold text-slate-800">Agenda de Hoje</h3>
+                    <div class="text-slate-600 font-medium bg-slate-100 px-3 py-1 rounded-lg">${new Date().toLocaleDateString('pt-BR')}</div>
+                </div>
+                <div id="attendant-agenda-items" class="space-y-3">${agendaItems}</div>
+            </div>`;
+        
+        container.querySelector('#attendant-agenda-items').addEventListener('click', async e => {
+            const button = e.target.closest('button[data-id]');
+            if (!button) return;
+            const id = button.dataset.id;
+            const action = button.dataset.action;
 
-        if (action === 'edit') {
-            this.renderAppointmentEditForm(id, 'attendant-agenda');
-        } else if (action === 'delete') {
-            this.confirmAction('Tem certeza que deseja excluir este agendamento?', () => this.handleDeleteAppointment(id, 'attendant-agenda'));
-        } else if (action === 'toggle-priority') {
-            button.disabled = true;
+            if (action === 'edit') {
+                this.renderAppointmentEditForm(id, 'attendant-agenda');
+            } else if (action === 'delete') {
+                this.confirmAction('Tem certeza que deseja excluir este agendamento?', () => this.handleDeleteAppointment(id, 'attendant-agenda'));
+            } else if (action === 'toggle-priority') {
+                button.disabled = true;
 
-            const icon = button.querySelector('.priority-icon');
-            const wasPriority = icon.classList.contains('is-priority');
-            icon.classList.toggle('is-priority');
-
-            try {
-                const response = await callApi('toggleAppointmentPriority', { appointmentId: id });
-                if (!response.success) {
-                    throw new Error(response.message);
-                }
-                const appointment = this.state.data.appointments.find(a => a.ID_Agendamento === id);
-                if (appointment) {
-                    appointment.Prioridade = wasPriority ? '' : 'SIM';
-                }
-            } catch (err) {
-                this.showNotification('error', 'Erro', 'Não foi possível alterar a prioridade.');
+                const icon = button.querySelector('.priority-icon');
+                const wasPriority = icon.classList.contains('is-priority');
                 icon.classList.toggle('is-priority');
-            } finally {
-                button.disabled = false;
+
+                try {
+                    const response = await callApi('toggleAppointmentPriority', { appointmentId: id });
+                    if (!response.success) {
+                        throw new Error(response.message);
+                    }
+                    const appointment = this.state.data.appointments.find(a => a.ID_Agendamento === id);
+                    if (appointment) {
+                        appointment.Prioridade = wasPriority ? '' : 'SIM';
+                    }
+                } catch (err) {
+                    this.showNotification('error', 'Erro', 'Não foi possível alterar a prioridade.');
+                    icon.classList.toggle('is-priority');
+                } finally {
+                    button.disabled = false;
+                }
             }
-        }
-    });
+        });
 
-    const checkForUpdates = async () => {
-        if (this.state.currentView !== 'attendant-agenda') return;
-        try {
-            const latestUpdate = await callApi('getLatestUpdateTimestamp');
-            if (latestUpdate > this.state.lastUpdateTimestamp) {
-                this.state.lastUpdateTimestamp = latestUpdate;
-                await this.refreshData('attendant-agenda', true);
+        const checkForUpdates = async () => {
+            if (this.state.currentView !== 'attendant-agenda') return;
+            try {
+                const latestUpdate = await callApi('getLatestUpdateTimestamp');
+                if (latestUpdate > this.state.lastUpdateTimestamp) {
+                    this.state.lastUpdateTimestamp = latestUpdate;
+                    await this.refreshData('attendant-agenda', true);
+                }
+            } catch (e) {
+                console.error("Falha ao verificar atualizações na agenda do atendente:", e);
             }
-        } catch (e) {
-            console.error("Falha ao verificar atualizações na agenda do atendente:", e);
-        }
-    };
+        };
 
-    const intervalConfig = this.state.data.config.find(c => c.Chave === 'AGENDA_REFRESH_INTERVAL_SECONDS');
-    const intervalSeconds = intervalConfig ? parseInt(intervalConfig.Valor, 10) : 15;
-    const intervalMilliseconds = (isNaN(intervalSeconds) || intervalSeconds <= 0) ? 15000 : intervalSeconds * 1000;
+        const intervalConfig = this.state.data.config.find(c => c.Chave === 'AGENDA_REFRESH_INTERVAL_SECONDS');
+        const intervalSeconds = intervalConfig ? parseInt(intervalConfig.Valor, 10) : 15;
+        const intervalMilliseconds = (isNaN(intervalSeconds) || intervalSeconds <= 0) ? 15000 : intervalSeconds * 1000;
 
-    if (this.state.agendaRefreshInterval) clearInterval(this.state.agendaRefreshInterval);
-    this.state.agendaRefreshInterval = setInterval(checkForUpdates, intervalMilliseconds);
-}
+        if (this.state.agendaRefreshInterval) clearInterval(this.state.agendaRefreshInterval);
+        this.state.agendaRefreshInterval = setInterval(checkForUpdates, intervalMilliseconds);
+    }
+});
     
+
 // ========================================================
 // VIEW PROFISSIONAL
 // ========================================================
@@ -1873,8 +1931,3 @@ Object.assign(App, {
 // INICIALIZAÇÃO DO APP
 // ========================================================
 document.addEventListener('DOMContentLoaded', () => App.init());
-
-
-
-
-
