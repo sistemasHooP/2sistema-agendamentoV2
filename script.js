@@ -165,60 +165,59 @@ const App = {
     },
 
     async handleLogin(event) {
-        event.preventDefault();
-        this.showLoader('Autenticando...');
-        this.elements.loginError.textContent = '';
-        const credentials = { 
-            role: this.elements.loginForm.roleSelect.value, 
-            username: this.elements.loginForm.username.value.trim(), 
-            password: this.elements.loginForm.password.value 
-        };
-        
-        try {
-            const loginResponse = await callApi('doLogin', { credentials });
-            if (!loginResponse.success) {
-                throw new Error(loginResponse.message || 'Credenciais inválidas.');
-            }
-
-            this.elements.loaderText.textContent = 'Carregando interface...';
-            this.state.currentUser = loginResponse.user;
-            
-            // --- ETAPA 1: CARGA RÁPIDA ---
-            if (this.state.currentUser.role === 'profissional') {
-                this.state.data = await callApi('getCoreProfessionalData');
-            } else {
-                this.state.data = await callApi('getCoreData');
-            }
-            
-            // --- ETAPA 2: LANÇAMENTO IMEDIATO ---
-            this.launchApp();
-
-            // --- ETAPA 3: CARGA PESADA EM SEGUNDO PLANO ---
-            this.showLoader('Buscando dados...');
-            
-            let defaultViewId;
-            if (this.state.currentUser.role === 'profissional') {
-                const agendaData = await callApi('getAgendaUpdate', { profId: this.state.currentUser.id });
-                this.state.data.agendaData = agendaData;
-                defaultViewId = 'professional-agenda';
-            } else { // Master e Atendente
-                const appointments = await callApi('getRecentAndFutureAppointments');
-                const dashboardStats = await callApi('getDashboardStats');
-                this.state.data.appointments = appointments;
-                this.state.data.dashboardStats = dashboardStats;
-                defaultViewId = this.state.currentUser.role === 'master' ? 'master-dashboard' : 'attendant-agenda';
-            }
-            
-            this.navigateTo(defaultViewId, true);
-
-        } catch (e) {
-            this.elements.loginError.textContent = e.message || 'Erro de comunicação.';
-            console.error(e);
-        } finally {
-            this.hideLoader();
+    event.preventDefault();
+    this.showLoader('Carregando sistema...'); // <-- ÚNICA MENSAGEM DEFINIDA AQUI
+    this.elements.loginError.textContent = '';
+    const credentials = { 
+        role: this.elements.loginForm.roleSelect.value, 
+        username: this.elements.loginForm.username.value.trim(), 
+        password: this.elements.loginForm.password.value 
+    };
+    
+    try {
+        const loginResponse = await callApi('doLogin', { credentials });
+        if (!loginResponse.success) {
+            throw new Error(loginResponse.message || 'Credenciais inválidas.');
         }
-    },
 
+        // Não há mais mudança de texto do loader aqui.
+        this.state.currentUser = loginResponse.user;
+        
+        // --- ETAPA 1: CARGA RÁPIDA ---
+        if (this.state.currentUser.role === 'profissional') {
+            this.state.data = await callApi('getCoreProfessionalData');
+        } else {
+            this.state.data = await callApi('getCoreData');
+        }
+        
+        // --- ETAPA 2: LANÇAMENTO IMEDIATO ---
+        this.launchApp();
+
+        // --- ETAPA 3: CARGA PESADA EM SEGUNDO PLANO ---
+        // A tela de carregamento continua visível com a mesma mensagem.
+        
+        let defaultViewId;
+        if (this.state.currentUser.role === 'profissional') {
+            const agendaData = await callApi('getAgendaUpdate', { profId: this.state.currentUser.id });
+            this.state.data.agendaData = agendaData;
+            defaultViewId = 'professional-agenda';
+        } else { // Master e Atendente
+            const appointments = await callApi('getRecentAndFutureAppointments');
+            const dashboardStats = await callApi('getDashboardStats');
+            this.state.data.appointments = appointments;
+            this.state.data.dashboardStats = dashboardStats;
+            defaultViewId = this.state.currentUser.role === 'master' ? 'master-dashboard' : 'attendant-agenda';
+        }
+        
+        this.navigateTo(defaultViewId, true);
+
+    } catch (e) {
+        this.elements.loginError.textContent = e.message || 'Erro de comunicação.';
+        console.error(e);
+    } finally {
+        this.hideLoader();
+    }
+},
     launchApp() {
         this.elements.loginScreen.classList.add('hidden');
         this.elements.appContainer.classList.remove('hidden');
@@ -1855,4 +1854,5 @@ Object.assign(App, {
 // INICIALIZAÇÃO DO APP
 // ========================================================
 document.addEventListener('DOMContentLoaded', () => App.init());
+
 
