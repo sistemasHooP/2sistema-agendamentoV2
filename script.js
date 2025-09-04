@@ -1,6 +1,7 @@
 // ========================================================
-// ARQUIVO: script.js (VERSÃO FINAL COM TODAS AS OTIMIZAÇÕES)
+// ARQUIVO: script.js (VERSÃO COM AJUDA E BACKUP)
 // ========================================================
+
 // ========================================================
 // MAPA DE CONFIGURAÇÕES (Traduções para a interface)
 // ========================================================
@@ -8,7 +9,7 @@ const SETTINGS_MAP = {
     'MOSTRAR_VIDEO_PAINEL': {
         label: 'Exibir Vídeo no Painel de Chamada',
         description: 'Se "Ativado", o painel de chamada exibirá um vídeo do YouTube no espaço ocioso.',
-        type: 'toggle' // Tipo especial para o interruptor
+        type: 'toggle'
     },
     'NOME_NEGOCIO': {
         label: 'Nome do Negócio',
@@ -39,38 +40,43 @@ const SETTINGS_MAP = {
         label: 'ID do Vídeo do YouTube',
         description: 'O código do vídeo que aparecerá no painel. Ex: "dQw4w9WgXcQ".',
         type: 'text'
+    },
+    'HELP_MESSAGE': {
+        label: 'Mensagem de Ajuda Rápida',
+        description: 'Esta mensagem aparecerá para Atendentes e Profissionais ao clicarem no botão de ajuda.',
+        type: 'textarea'
     }
-    // A chave 'LAST_UPDATE_TIMESTAMP' é interna do sistema e não será mostrada.
 };
+
 // URL da sua API no Google Apps Script
 const GAS_API_URL = "https://script.google.com/macros/s/AKfycbyn1jRZtt3Ytyn9CQN-oNrixr5zpBFKU3gKn_whuBPXE_T6uLv-wGGxpBJJMgVyIWzpOw/exec";
 
 async function callApi(action, params = {}) {
-  try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 20000); // 20 segundos de timeout
+    try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 30000); // Timeout aumentado para 30s para ações demoradas
 
-    const response = await fetch(GAS_API_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify({ action, params }),
-      signal: controller.signal
-    });
-    
-    clearTimeout(timeoutId);
+        const response = await fetch(GAS_API_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+            body: JSON.stringify({ action, params }),
+            signal: controller.signal
+        });
+        
+        clearTimeout(timeoutId);
 
-    if (!response.ok) { throw new Error(`Erro de rede: ${response.statusText}`); }
-    const result = await response.json();
-    if (!result.success) { throw new Error(result.message); }
-    return result.data;
-  } catch (error) {
-    if (error.name === 'AbortError') {
-      console.error(`Erro: A chamada para a ação "${action}" demorou mais de 20 segundos para responder (timeout).`);
-      throw new Error("O servidor demorou muito para responder. Verifique sua conexão ou tente novamente.");
+        if (!response.ok) { throw new Error(`Erro de rede: ${response.statusText}`); }
+        const result = await response.json();
+        if (!result.success) { throw new Error(result.message); }
+        return result.data;
+    } catch (error) {
+        if (error.name === 'AbortError') {
+            console.error(`Erro: A chamada para a ação "${action}" demorou mais de 30 segundos para responder (timeout).`);
+            throw new Error("O servidor demorou muito para responder. Verifique sua conexão ou tente novamente.");
+        }
+        console.error(`Erro ao chamar a ação "${action}":`, error);
+        throw error;
     }
-    console.error(`Erro ao chamar a ação "${action}":`, error);
-    throw error;
-  }
 }
 
 
@@ -165,59 +171,54 @@ const App = {
     },
 
     async handleLogin(event) {
-    event.preventDefault();
-    this.showLoader('Carregando sistema...'); // <-- ÚNICA MENSAGEM DEFINIDA AQUI
-    this.elements.loginError.textContent = '';
-    const credentials = { 
-        role: this.elements.loginForm.roleSelect.value, 
-        username: this.elements.loginForm.username.value.trim(), 
-        password: this.elements.loginForm.password.value 
-    };
-    
-    try {
-        const loginResponse = await callApi('doLogin', { credentials });
-        if (!loginResponse.success) {
-            throw new Error(loginResponse.message || 'Credenciais inválidas.');
-        }
+        event.preventDefault();
+        this.showLoader('Carregando sistema...');
+        this.elements.loginError.textContent = '';
+        const credentials = { 
+            role: this.elements.loginForm.roleSelect.value, 
+            username: this.elements.loginForm.username.value.trim(), 
+            password: this.elements.loginForm.password.value 
+        };
+        
+        try {
+            const loginResponse = await callApi('doLogin', { credentials });
+            if (!loginResponse.success) {
+                throw new Error(loginResponse.message || 'Credenciais inválidas.');
+            }
 
-        // Não há mais mudança de texto do loader aqui.
-        this.state.currentUser = loginResponse.user;
-        
-        // --- ETAPA 1: CARGA RÁPIDA ---
-        if (this.state.currentUser.role === 'profissional') {
-            this.state.data = await callApi('getCoreProfessionalData');
-        } else {
-            this.state.data = await callApi('getCoreData');
-        }
-        
-        // --- ETAPA 2: LANÇAMENTO IMEDIATO ---
-        this.launchApp();
+            this.state.currentUser = loginResponse.user;
+            
+            if (this.state.currentUser.role === 'profissional') {
+                this.state.data = await callApi('getCoreProfessionalData');
+            } else {
+                this.state.data = await callApi('getCoreData');
+            }
+            
+            this.launchApp();
 
-        // --- ETAPA 3: CARGA PESADA EM SEGUNDO PLANO ---
-        // A tela de carregamento continua visível com a mesma mensagem.
-        
-        let defaultViewId;
-        if (this.state.currentUser.role === 'profissional') {
-            const agendaData = await callApi('getAgendaUpdate', { profId: this.state.currentUser.id });
-            this.state.data.agendaData = agendaData;
-            defaultViewId = 'professional-agenda';
-        } else { // Master e Atendente
-            const appointments = await callApi('getRecentAndFutureAppointments');
-            const dashboardStats = await callApi('getDashboardStats');
-            this.state.data.appointments = appointments;
-            this.state.data.dashboardStats = dashboardStats;
-            defaultViewId = this.state.currentUser.role === 'master' ? 'master-dashboard' : 'attendant-agenda';
-        }
-        
-        this.navigateTo(defaultViewId, true);
+            let defaultViewId;
+            if (this.state.currentUser.role === 'profissional') {
+                const agendaData = await callApi('getAgendaUpdate', { profId: this.state.currentUser.id });
+                this.state.data.agendaData = agendaData;
+                defaultViewId = 'professional-agenda';
+            } else { // Master e Atendente
+                const appointments = await callApi('getRecentAndFutureAppointments');
+                const dashboardStats = await callApi('getDashboardStats');
+                this.state.data.appointments = appointments;
+                this.state.data.dashboardStats = dashboardStats;
+                defaultViewId = this.state.currentUser.role === 'master' ? 'master-dashboard' : 'attendant-agenda';
+            }
+            
+            this.navigateTo(defaultViewId, true);
 
-    } catch (e) {
-        this.elements.loginError.textContent = e.message || 'Erro de comunicação.';
-        console.error(e);
-    } finally {
-        this.hideLoader();
-    }
-},
+        } catch (e) {
+            this.elements.loginError.textContent = e.message || 'Erro de comunicação.';
+            console.error(e);
+        } finally {
+            this.hideLoader();
+        }
+    },
+
     launchApp() {
         this.elements.loginScreen.classList.add('hidden');
         this.elements.appContainer.classList.remove('hidden');
@@ -257,9 +258,15 @@ const App = {
             navLinksHtml += `
                 <a href="#" id="sidebarNewAppointmentBtn" class="nav-link bg-blue-600 text-white hover:bg-blue-700 hover:text-white mt-2">
                     <i class="fa-solid fa-plus fa-fw w-6"></i><span>Novo Agendamento</span>
-                </a>
-            `;
+                </a>`;
         }
+        
+        // --- NOVO: Botão de Ajuda Flutuante ---
+        const isHelpUser = ['atendente', 'profissional'].includes(this.state.currentUser.role);
+        const helpButtonHtml = isHelpUser ? `
+            <button id="help-fab" class="fixed bottom-6 right-6 z-40 h-14 w-14 rounded-full bg-blue-600 text-white shadow-lg hover:bg-blue-700 transition-transform duration-200 hover:scale-110 flex items-center justify-center">
+                <i class="fa-solid fa-question fa-lg"></i>
+            </button>` : '';
 
         this.elements.appContainer.innerHTML = `
             <div class="h-screen flex flex-col">
@@ -270,9 +277,7 @@ const App = {
                             <img id="sidebarLogo" src="" alt="Logo" class="hidden h-12 w-12 rounded-full object-contain bg-white p-1">
                             ${titleHtml}
                         </div>
-                        <nav class="flex-grow p-2 space-y-1">
-                            ${navLinksHtml}
-                        </nav>
+                        <nav class="flex-grow p-2 space-y-1">${navLinksHtml}</nav>
                         <div class="p-4 border-t border-slate-200 mt-auto">
                             <button id="logout-button" class="w-full btn btn-secondary !bg-slate-100 hover:!bg-red-500 hover:!text-white">
                                 <i class="fa-solid fa-right-from-bracket mr-2"></i>Sair
@@ -289,6 +294,7 @@ const App = {
                             </div>
                         </header>
                         <div id="main-content" class="flex-1 p-4 md:p-6 overflow-y-auto"></div>
+                        ${helpButtonHtml}
                     </main>
                 </div>
             </div>`;
@@ -300,10 +306,7 @@ const App = {
         const menus = {
             master: [ { id: 'master-dashboard', label: 'Dashboard', icon: 'fa-tachometer-alt' }, { id: 'master-appointments', label: 'Agendamentos', icon: 'fa-calendar-days' }, { id: 'master-professionals', label: 'Profissionais', icon: 'fa-user-tie' }, { id: 'master-attendants', label: 'Atendentes', icon: 'fa-users' }, { id: 'master-services', label: 'Serviços', icon: 'fa-tags' }, { id: 'master-settings', label: 'Configurações', icon: 'fa-gear' }, { id: 'master-import', label: 'Importar Dados', icon: 'fa-upload' } ],
             atendente: [ { id: 'attendant-agenda', label: 'Agenda do Dia', icon: 'fa-calendar-day' }, { id: 'attendant-schedule', label: 'Novo Agendamento', icon: 'fa-plus' } ],
-            profissional: [ 
-                { id: 'professional-agenda', label: 'Minha Agenda', icon: 'fa-calendar-check' },
-                { id: 'professional-client-search', label: 'Clientes Cadastrados', icon: 'fa-search' }
-            ]
+            profissional: [ { id: 'professional-agenda', label: 'Minha Agenda', icon: 'fa-calendar-check' }, { id: 'professional-client-search', label: 'Clientes Cadastrados', icon: 'fa-search' } ]
         };
         return menus[role] || [];
     },
@@ -373,19 +376,27 @@ const App = {
     attachEventListeners() {
         document.getElementById('logout-button').addEventListener('click', this.handleLogout.bind(this));
         
-        document.getElementById('app-container').addEventListener('click', (e) => {
-            const targetLink = e.target.closest('a.nav-link');
-            if (!targetLink) return;
-
-            e.preventDefault();
-
-            if (targetLink.id === 'sidebarNewAppointmentBtn') {
-                this.renderAttendantSchedule(this.state.currentUser.id);
-                return; 
+        const appContainer = document.getElementById('app-container');
+        
+        appContainer.addEventListener('click', (e) => {
+            const navLink = e.target.closest('a.nav-link');
+            if (navLink) {
+                e.preventDefault();
+                if (navLink.id === 'sidebarNewAppointmentBtn') {
+                    this.renderAttendantSchedule(this.state.currentUser.id);
+                    return; 
+                }
+                if (navLink.dataset.view) {
+                    this.navigateTo(navLink.dataset.view);
+                }
             }
-
-            if (targetLink.dataset.view) {
-                this.navigateTo(targetLink.dataset.view);
+            
+            // --- NOVO: Event listener para o botão de ajuda ---
+            const helpButton = e.target.closest('#help-fab');
+            if (helpButton) {
+                const helpConfig = this.state.data.config.find(c => c.Chave === 'HELP_MESSAGE');
+                const helpMessage = helpConfig ? helpConfig.Valor.replace(/\n/g, '<br>') : 'Nenhuma mensagem de ajuda configurada.';
+                this.openModal('Ajuda Rápida', `<div class="prose prose-slate max-w-none">${helpMessage}</div>`);
             }
         });
 
@@ -1862,6 +1873,7 @@ Object.assign(App, {
 // INICIALIZAÇÃO DO APP
 // ========================================================
 document.addEventListener('DOMContentLoaded', () => App.init());
+
 
 
 
