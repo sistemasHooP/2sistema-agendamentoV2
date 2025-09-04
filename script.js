@@ -288,6 +288,10 @@ const App = {
                         <header class="bg-white/80 backdrop-blur-sm border-b border-slate-200 p-4 flex justify-between items-center sticky top-0 z-10">
                             <button id="menu-btn" class="text-slate-600 hover:text-slate-900 md:hidden"><i class="fa-solid fa-bars fa-xl"></i></button>
                             <h2 id="view-title" class="text-xl font-bold text-slate-800"></h2>
+                            <button id="openCallScreenBtn" class="btn btn-secondary ml-4" title="Abrir Painel de Chamada para Clientes">
+                            <i class="fa-solid fa-desktop mr-2"></i>
+                            <span>Painel</span>
+                            </button>
                             <div class="text-right">
                                 <p class="font-semibold text-slate-700">${this.state.currentUser.name}</p>
                                 <p class="text-sm text-slate-500 capitalize">${this.state.currentUser.role}</p>
@@ -403,6 +407,26 @@ const App = {
         const toggleSidebar = () => { sidebar.classList.toggle('open'); sidebar.classList.toggle('-translate-x-full'); sidebarOverlay.classList.toggle('hidden'); };
         if (menuBtn) menuBtn.addEventListener('click', toggleSidebar);
         if (sidebarOverlay) sidebarOverlay.addEventListener('click', toggleSidebar);
+
+        // Adicione este bloco dentro da função attachEventListeners()
+
+const openCallScreenBtn = document.getElementById('openCallScreenBtn');
+if (openCallScreenBtn) {
+    openCallScreenBtn.addEventListener('click', () => {
+        // Encontra a URL do painel nas configurações que já carregamos
+        const callScreenConfig = this.state.data.config.find(c => c.Chave === 'CALL_SCREEN_URL');
+        
+        if (callScreenConfig && callScreenConfig.Valor) {
+            // Abre a URL em uma nova aba
+            window.open(callScreenConfig.Valor, '_blank');
+        } else {
+            // Mostra um erro se a URL não estiver configurada
+            this.showNotification('error', 'URL não encontrada', 'A URL do Painel de Chamada não está definida nas Configurações do sistema.');
+        }
+    });
+}
+
+        
     },
 
     openModal(title, contentHTML, maxWidthClass = 'max-w-2xl') {
@@ -1931,3 +1955,4 @@ Object.assign(App, {
 // INICIALIZAÇÃO DO APP
 // ========================================================
 document.addEventListener('DOMContentLoaded', () => App.init());
+
