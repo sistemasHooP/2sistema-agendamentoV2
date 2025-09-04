@@ -1326,39 +1326,29 @@ Object.assign(App, {
             this.renderAppointmentEditForm(id, 'attendant-agenda');
         } else if (action === 'delete') {
             this.confirmAction('Tem certeza que deseja excluir este agendamento?', () => this.handleDeleteAppointment(id, 'attendant-agenda'));
-        
-        // ================== INÍCIO DA MUDANÇA ==================
         } else if (action === 'toggle-priority') {
-            button.disabled = true; // Desabilita o botão para evitar cliques múltiplos
+            button.disabled = true;
 
-            // --- ATUALIZAÇÃO OTIMISTA ---
-            // 1. Mude a interface instantaneamente
             const icon = button.querySelector('.priority-icon');
             const wasPriority = icon.classList.contains('is-priority');
             icon.classList.toggle('is-priority');
 
             try {
-                // 2. Envie a requisição para o servidor em segundo plano
                 const response = await callApi('toggleAppointmentPriority', { appointmentId: id });
                 if (!response.success) {
                     throw new Error(response.message);
                 }
-                // Sucesso! O servidor confirmou. Não precisamos fazer nada na tela,
-                // pois ela já foi atualizada. Apenas atualizamos o nosso estado interno.
                 const appointment = this.state.data.appointments.find(a => a.ID_Agendamento === id);
                 if (appointment) {
                     appointment.Prioridade = wasPriority ? '' : 'SIM';
                 }
             } catch (err) {
-                // 3. Se deu erro, desfaça a mudança na interface e notifique o usuário
                 this.showNotification('error', 'Erro', 'Não foi possível alterar a prioridade.');
-                icon.classList.toggle('is-priority'); // Reverte a mudança visual
+                icon.classList.toggle('is-priority');
             } finally {
-                // 4. Reabilite o botão, seja em caso de sucesso ou erro.
                 button.disabled = false;
             }
         }
-        // =================== FIM DA MUDANÇA ===================
     });
 
     const checkForUpdates = async () => {
@@ -1378,10 +1368,9 @@ Object.assign(App, {
     const intervalSeconds = intervalConfig ? parseInt(intervalConfig.Valor, 10) : 15;
     const intervalMilliseconds = (isNaN(intervalSeconds) || intervalSeconds <= 0) ? 15000 : intervalSeconds * 1000;
 
-    // Limpa o intervalo anterior para não ter múltiplos rodando
     if (this.state.agendaRefreshInterval) clearInterval(this.state.agendaRefreshInterval);
     this.state.agendaRefreshInterval = setInterval(checkForUpdates, intervalMilliseconds);
-},
+}
     
 // ========================================================
 // VIEW PROFISSIONAL
@@ -1873,6 +1862,7 @@ Object.assign(App, {
 // INICIALIZAÇÃO DO APP
 // ========================================================
 document.addEventListener('DOMContentLoaded', () => App.init());
+
 
 
 
