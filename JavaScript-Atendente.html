@@ -1,0 +1,319 @@
+<script>
+// ========================================================
+// ARQUIVO: JavaScript-Atendente.html
+// Contém todas as funções de renderização para as telas do perfil Atendente.
+// ========================================================
+Object.assign(App, {
+    renderAttendantSchedule(profId = null) {
+        const isModal = profId !== null;
+        const title = 'Novo Agendamento';
+        if (!isModal) document.getElementById('view-title').textContent = title;
+        
+        const container = isModal ? document.createElement('div') : this.elements.mainContent;
+
+        const profOptions = this.state.data.professionals.filter(p => p.Status === 'Ativo').map(p => `<option value="${p.ID_Profissional}" ${p.ID_Profissional === profId ? 'selected' : ''}>${p.Nome_Completo}</option>`).join('');
+        const serviceOptions = this.state.data.services.map(s => `<option value="${s.Nome_Servico}">${s.Nome_Servico}</option>`).join('');
+        
+        const formHtml = `
+            <form id="newAppointmentForm" class="space-y-6">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div><label class="form-label">1. Profissional</label><select id="schedulingProfessional" class="form-select mt-1" ${profId ? 'disabled' : ''}><option value="">Selecione...</option>${profOptions}</select></div>
+                    <div><label class="form-label">2. Data do Atendimento</label><input type="date" id="schedulingDate" class="form-input mt-1" disabled></div>
+                </div>
+                
+                <div id="clientDetailsForm" class="hidden pt-6 border-t border-slate-200">
+                    <h4 class="form-label mb-4">3. Detalhes do Cliente e Serviço</h4>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div><label for="clientName" class="form-label">Nome Completo</label><input type="text" id="clientName" class="form-input mt-1" required></div>
+                        <div><label for="clientPhone" class="form-label">Telefone (WhatsApp)</label><input type="tel" id="clientPhone" class="form-input mt-1" required></div>
+                        <div class="md:col-span-2"><label for="clientService" class="form-label">Serviço</label><select id="clientService" class="form-select mt-1">${serviceOptions}</select></div>
+                        <div class="md:col-span-2"><label for="clientObs" class="form-label">Observações do Agendamento</label><textarea id="clientObs" rows="3" class="form-input mt-1"></textarea></div>
+                        <div class="md:col-span-2 flex items-center pt-2">
+                            <input id="clientPriority" type="checkbox" class="h-4 w-4 text-blue-600 border-slate-300 rounded focus:ring-blue-500">
+                            <label for="clientPriority" class="ml-2 text-sm font-medium text-slate-700">Atendimento Prioritário</label>
+                        </div>
+                    </div>
+                    <div class="mt-6 text-right"><button type="submit" class="btn btn-primary"><i class="fa-solid fa-ticket mr-2"></i>Gerar Ficha</button></div>
+                </div>
+            </form>`;
+
+        if (isModal) {
+            this.openModal(title, formHtml, 'max-w-3xl');
+        } else {
+            container.innerHTML = `<div class="bg-white p-6 sm:p-8 rounded-xl shadow-md border border-slate-200 max-w-3xl mx-auto">${formHtml}</div>`;
+        }
+
+        const formContainer = isModal ? this.elements.modalContent : container;
+        const profSelect = formContainer.querySelector('#schedulingProfessional');
+        const dateInput = formContainer.querySelector('#schedulingDate');
+        const clientDetailsForm = formContainer.querySelector('#clientDetailsForm');
+        let professionalWorkdays = {}; 
+
+        profSelect.addEventListener('change', async () => {
+            dateInput.value = ''; 
+            clientDetailsForm.classList.add('hidden');
+            if (!profSelect.value) {
+                dateInput.disabled = true;
+                return;
+            }
+            try {
+                this.showLoader('Verificando dias de trabalho...');
+                const response = await callApi('getProfessionalWorkdays', { professionalId: profSelect.value });
+                if(response.success) {
+                    professionalWorkdays = response.workdays;
+                    dateInput.disabled = false;
+                } else {
+                    throw new Error(response.message);
+                }
+            } catch(e) {
+                this.showNotification('error', 'Erro', e.message);
+            } finally {
+                this.hideLoader();
+            }
+        });
+        
+        dateInput.addEventListener('change', () => {
+            if (!dateInput.value) {
+                clientDetailsForm.classList.add('hidden');
+                return;
+            }
+            const selectedDate = new Date(dateInput.value + 'T12:00:00');
+            const dayOfWeek = selectedDate.getUTCDay();
+
+            if (professionalWorkdays[dayOfWeek]) {
+                clientDetailsForm.classList.remove('hidden');
+            } else {
+                const alertTitle = "Data Indisponível";
+                const alertContent = `
+                    <div class="text-center">
+                        <div class="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-yellow-100">
+                            <i class="fa-solid fa-triangle-exclamation text-2xl text-yellow-500"></i>
+                        </div>
+                        <h3 class="mt-4 text-lg font-semibold text-slate-800">Dia de Folga</h3>
+                        <p class="mt-2 text-slate-600">O profissional selecionado não trabalha neste dia da semana. Por favor, escolha outra data.</p>
+                    </div>
+                    <div class="flex justify-center pt-6 border-t border-slate-200 mt-6">
+                        <button type="button" class="btn btn-primary" onclick="App.closeModal()">Entendido</button>
+                    </div>`;
+                
+                this.openModal(alertTitle, alertContent, 'max-w-md');
+                
+                dateInput.value = '';
+                clientDetailsForm.classList.add('hidden');
+            }
+        });
+
+        if (isModal && profSelect.value) {
+            profSelect.dispatchEvent(new Event('change'));
+        }
+        
+        formContainer.querySelector('#clientPhone').addEventListener('input', e => {
+            e.target.value = e.target.value.replace(/\D/g, '');
+        });
+
+        formContainer.querySelector('#newAppointmentForm').addEventListener('submit', e => {
+            e.preventDefault();
+            const submitButton = e.target.querySelector('button[type="submit"]');
+            submitButton.disabled = true;
+            submitButton.innerHTML = `<i class="fa-solid fa-spinner animate-spin mr-2"></i>Gerando...`;
+
+            setTimeout(async () => {
+                const appointmentData = {
+                    ID_Profissional: profSelect.value, 
+                    Data: dateInput.value, 
+                    Nome_Cliente: formContainer.querySelector('#clientName').value, 
+                    Telefone_WhatsApp: formContainer.querySelector('#clientPhone').value,
+                    Servico: formContainer.querySelector('#clientService').value, 
+                    Observacoes: formContainer.querySelector('#clientObs').value,
+                    Status: 'Confirmado',
+                    Prioridade: formContainer.querySelector('#clientPriority').checked ? 'SIM' : ''
+                };
+                try {
+                    const response = await callApi('scheduleNewAppointment_step1_saveToSheet', { appointmentData });
+                    if (response.success) {
+                        callApi('scheduleNewAppointment_step2_backgroundTasks', { appointmentObject: response.appointment });
+                        const { number, clientName, professionalName } = response.ticket;
+                        const ticketHtml = `
+                            <div class="text-center p-4">
+                                <p class="text-slate-600">Agendamento Confirmado!</p>
+                                <h3 class="text-3xl font-bold text-slate-800 mt-2">${clientName}</h3>
+                                <p class="text-slate-500 mt-1">com ${professionalName}</p>
+                                <div class="mt-8 bg-blue-50 border-2 border-blue-200 rounded-xl p-6">
+                                    <p class="text-lg font-semibold text-blue-800">FICHA DE ATENDIMENTO</p>
+                                    <p class="text-8xl font-bold text-blue-600 tracking-tight mt-2">${String(number).padStart(3, '0')}</p>
+                                </div>
+                            </div>
+                            <div class="flex justify-center p-6 border-t border-slate-200 mt-4">
+                                <button type="button" class="btn btn-primary" onclick="App.closeModal()">Fechar</button>
+                            </div>`;
+                        if (isModal) {
+                            this.closeModal();
+                            this.openModal('Ficha Gerada', ticketHtml, 'max-w-md');
+                            await this.refreshData('professional-agenda');
+                        } else {
+                            formContainer.querySelector('#clientName').value = '';
+                            formContainer.querySelector('#clientPhone').value = '';
+                            formContainer.querySelector('#clientService').selectedIndex = 0;
+                            formContainer.querySelector('#clientObs').value = '';
+                            formContainer.querySelector('#clientPriority').checked = false;
+                            this.refreshData(null, true);
+                            this.openModal('Ficha Gerada', ticketHtml, 'max-w-md');
+                        }
+                    } else { throw new Error(response.message); }
+                } catch (err) { 
+                    this.showNotification('error', 'Erro ao Agendar', err.message); 
+                } finally { 
+                    submitButton.disabled = false;
+                    submitButton.innerHTML = `<i class="fa-solid fa-ticket mr-2"></i>Gerar Ficha`;
+                }
+            }, 10);
+        });
+    },
+    
+    renderAttendantAgenda() {
+        document.getElementById('view-title').textContent = 'Agenda';
+        const container = this.elements.mainContent;
+        if (!this.state.data.appointments) {
+            container.innerHTML = `<div class="flex justify-center items-center p-8"><i class="fa-solid fa-spinner animate-spin text-2xl text-slate-400 mr-3"></i><span class="text-slate-500">Carregando agendamentos...</span></div>`;
+            return;
+        }
+
+        // Pega a data do state ou usa a data de hoje como padrão
+        const today = new Date();
+        const todayStr = new Date(today.setMinutes(today.getMinutes() - today.getTimezoneOffset())).toISOString().split('T')[0];
+        const selectedDate = this.state.appointments.filters.agendaDate || todayStr;
+        
+        const selectedAppointments = this.state.data.appointments
+          .filter(a => a.Data === selectedDate)
+          .sort((a, b) => parseInt(a.Numero_Ficha, 10) - parseInt(b.Numero_Ficha, 10));
+        
+        const agendaItems = selectedAppointments.length > 0 ? selectedAppointments.map(appt => {
+            const prof = this.state.data.professionals.find(p => p.ID_Profissional === appt.ID_Profissional);
+            const canEditOrDelete = appt.Status === 'Confirmado' || appt.Status === 'Pendente';
+            const isPriority = appt.Prioridade === 'SIM';
+            
+            return `
+            <div class="p-4 border-l-4 border-${{Confirmado:'green',Pendente:'yellow',Concluído:'blue',Cancelado:'red',Chamado:'purple'}[appt.Status] || 'slate'}-400 rounded-lg flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-white shadow-sm">
+                <div class="flex items-center gap-3 flex-grow">
+                    <div class="font-bold text-slate-800 text-lg bg-slate-100 px-3 py-1 rounded-md">Ficha ${String(appt.Numero_Ficha || '-').padStart(3, '0')}</div>
+                    <div>
+                        <div class="font-medium text-slate-700">${appt.Nome_Cliente}</div>
+                        <div class="text-sm text-slate-500">com ${prof ? prof.Nome_Completo : 'N/A'}</div>
+                    </div>
+                </div>
+                <div class="flex items-center justify-between pt-2 sm:pt-0">
+                    <span class="status-${appt.Status || 'default'}">${appt.Status}</span>
+                    <div class="flex items-center gap-2">
+                        <button data-action="toggle-priority" data-id="${appt.ID_Agendamento}" class="btn-icon" title="Marcar como Prioridade">
+                            <i class="fa-solid fa-star priority-icon ${isPriority ? 'is-priority' : ''}"></i>
+                        </button>
+                        <button data-action="edit" data-id="${appt.ID_Agendamento}" class="btn btn-secondary !p-2" title="Editar" ${!canEditOrDelete ? 'disabled' : ''}><i class="fa-solid fa-pencil"></i></button>
+                        <button data-action="delete" data-id="${appt.ID_Agendamento}" class="btn btn-danger !p-2" title="Excluir" ${!canEditOrDelete ? 'disabled' : ''}><i class="fa-solid fa-trash"></i></button>
+                    </div>
+                </div>
+            </div>
+            `;
+        }).join('') : `<div class="text-center p-8"><p class="text-slate-500">Nenhum agendamento para ${new Date(selectedDate + 'T12:00:00').toLocaleDateString('pt-BR')}.</p></div>`;
+
+        container.innerHTML = `
+            <div class="bg-white p-4 sm:p-6 rounded-xl shadow-md border border-slate-200 flex flex-col h-full">
+                <div class="flex flex-col sm:flex-row justify-between sm:items-center gap-4 mb-4">
+                    <h3 class="text-xl font-bold text-slate-800">Agenda</h3>
+                    <div class="flex items-center gap-2">
+                        <input type="date" id="agenda-date-picker" class="form-input" value="${selectedDate}">
+                        <button id="attendant-generate-pdf-btn" class="btn btn-secondary" title="Gerar Relatório PDF do Dia">
+                            <i class="fa-solid fa-file-pdf"></i>
+                        </button>
+                    </div>
+                </div>
+                <div id="attendant-agenda-items" class="space-y-3 flex-grow max-h-[60vh] overflow-y-auto pr-2">
+                    ${agendaItems}
+                </div>
+            </div>`;
+        
+        const datePicker = container.querySelector('#agenda-date-picker');
+        datePicker.addEventListener('change', () => {
+            this.state.appointments.filters.agendaDate = datePicker.value;
+            this.renderAttendantAgenda();
+        });
+
+        const pdfBtn = container.querySelector('#attendant-generate-pdf-btn');
+        pdfBtn.addEventListener('click', () => {
+            const date = datePicker.value;
+            
+            if (!document.getElementById('filterStartDate')) {
+                const hiddenInputs = `
+                <div class="hidden">
+                    <input type="date" id="filterStartDate">
+                    <input type="date" id="filterEndDate">
+                    <select id="filterProfessional"></select>
+                    <select id="filterStatus"></select>
+                </div>
+             `;
+              document.body.appendChild(new DOMParser().parseFromString(hiddenInputs, 'text/html').body.firstChild);
+            }
+
+            document.getElementById('filterStartDate').value = date;
+            document.getElementById('filterEndDate').value = date;
+            document.getElementById('filterProfessional').value = '';
+            document.getElementById('filterStatus').value = '';
+            this.generatePDF();
+        });
+        
+        container.querySelector('#attendant-agenda-items').addEventListener('click', async e => {
+            const button = e.target.closest('button[data-id]');
+            if (!button) return;
+            const id = button.dataset.id;
+            const action = button.dataset.action;
+
+            if (action === 'edit') {
+                this.renderAppointmentEditForm(id, 'attendant-agenda');
+            } else if (action === 'delete') {
+                this.confirmAction('Tem certeza que deseja excluir este agendamento?', () => this.handleDeleteAppointment(id, 'attendant-agenda'));
+            } else if (action === 'toggle-priority') {
+                button.disabled = true;
+
+                const icon = button.querySelector('.priority-icon');
+                const wasPriority = icon.classList.contains('is-priority');
+                icon.classList.toggle('is-priority');
+
+                try {
+                    const response = await callApi('toggleAppointmentPriority', { appointmentId: id });
+                    if (!response.success) {
+                        throw new Error(response.message);
+                    }
+                    const appointment = this.state.data.appointments.find(a => a.ID_Agendamento === id);
+                    if (appointment) {
+                        appointment.Prioridade = wasPriority ? '' : 'SIM';
+                    }
+                } catch (err) {
+                    this.showNotification('error', 'Erro', 'Não foi possível alterar a prioridade.');
+                    icon.classList.toggle('is-priority');
+                } finally {
+                    button.disabled = false;
+                }
+            }
+        });
+
+        const checkForUpdates = async () => {
+            if (this.state.currentView !== 'attendant-agenda' || datePicker.value !== todayStr) return;
+            try {
+                const latestUpdate = await callApi('getLatestUpdateTimestamp');
+                if (latestUpdate > this.state.lastUpdateTimestamp) {
+                    this.state.lastUpdateTimestamp = latestUpdate;
+                    await this.refreshData('attendant-agenda', true);
+                }
+            } catch (e) {
+                console.error("Falha ao verificar atualizações na agenda do atendente:", e);
+            }
+        };
+
+        const intervalConfig = this.state.data.config.find(c => c.Chave === 'AGENDA_REFRESH_INTERVAL_SECONDS');
+        const intervalSeconds = intervalConfig ? parseInt(intervalConfig.Valor, 10) : 15;
+        const intervalMilliseconds = (isNaN(intervalSeconds) || intervalSeconds <= 0) ? 15000 : intervalSeconds * 1000;
+
+        if (this.state.agendaRefreshInterval) clearInterval(this.state.agendaRefreshInterval);
+        this.state.agendaRefreshInterval = setInterval(checkForUpdates, intervalMilliseconds);
+    }
+});
+</script>
