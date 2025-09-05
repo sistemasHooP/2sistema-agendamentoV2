@@ -1,0 +1,481 @@
+<script>
+// ========================================================
+// ARQUIVO: JavaScript-Core.html
+// Lógica principal do aplicativo, comum a todos os perfis.
+// ========================================================
+
+// MAPA DE CONFIGURAÇÕES (Traduções para a interface)
+const SETTINGS_MAP = {
+ 'MOSTRAR_VIDEO_PAINEL': {
+ 'label': 'Exibir Vídeo no Painel de Chamada',
+ 'description': 'Se "Ativado", o painel de chamada exibirá um vídeo do YouTube no espaço ocioso.',
+ 'type': 'toggle'
+ },
+ 'NOME_NEGOCIO': {
+ 'label': 'Nome do Negócio',
+ 'description': 'Este nome aparecerá na tela de login e no topo do sistema.',
+ 'type': 'text'
+ },
+ 'LOGO_URL': {
+ 'label': 'URL da Logo',
+ 'description': 'Cole o link público (URL) da imagem que servirá como logo.',
+ 'type': 'text'
+ },
+ 'DURACAO_PADRAO_SLOT_MINUTOS': {
+ 'label': 'Duração do Atendimento (minutos)',
+ 'description': 'Tempo padrão, em minutos, que cada atendimento ocupa na agenda.',
+ 'type': 'number'
+ },
+ 'AGENDA_REFRESH_INTERVAL_SECONDS': {
+ 'label': 'Intervalo de Atualização da Agenda (segundos)',
+ 'description': 'De quantos em quantos segundos a agenda do profissional e atendente atualiza automaticamente.',
+ 'type': 'number'
+ },
+ 'CALL_SCREEN_URL': {
+ 'label': 'URL do Painel de Chamada',
+ 'description': 'O link público do painel que exibe as chamadas para os clientes.',
+ 'type': 'text'
+ },
+ 'YOUTUBE_VIDEO_ID': {
+ 'label': 'ID do Vídeo do YouTube',
+ 'description': 'O código do vídeo que aparecerá no painel. Ex: "dQw4w9WgXcQ".',
+ 'type': 'text'
+ },
+ 'HELP_MESSAGE': {
+ 'label': 'Mensagem de Ajuda Rápida',
+ 'description': 'Esta mensagem aparecerá para Atendentes e Profissionais ao clicarem no botão de ajuda.',
+ 'type': 'textarea'
+ }
+};
+
+// A constante GAS_API_URL é definida no index.html
+
+async function callApi(action, params = {}) {
+ try {
+ const controller = new AbortController();
+ const timeoutId = setTimeout(() => controller.abort(), 30000); 
+
+ const response = await fetch(GAS_API_URL, {
+ method: 'POST',
+ headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+ body: JSON.stringify({ action, params }),
+ signal: controller.signal
+ });
+ 
+ clearTimeout(timeoutId);
+
+ if (!response.ok) { throw new Error(`Erro de rede: ${response.statusText}`); }
+ const result = await response.json();
+ if (!result.success) { throw new Error(result.message); }
+ return result.data;
+ } catch (error) {
+ if (error.name === 'AbortError') {
+ console.error(`Erro: A chamada para a ação "${action}" demorou mais de 30 segundos para responder (timeout).`);
+ throw new Error("O servidor demorou muito para responder. Verifique sua conexão ou tente novamente.");
+ }
+ console.error(`Erro ao chamar a ação "${action}":`, error);
+ throw error;
+ }
+}
+
+// CORE DO APLICATIVO
+const App = {
+ state: { 
+ currentUser: null, 
+ currentView: null, 
+ charts: {}, 
+ data: {}, 
+ agendaRefreshInterval: null, 
+ appointments: { currentPage: 1, pageSize: 20, totalCount: 0, filters: {} }, 
+ lastUpdateTimestamp: 0,
+ isCallingClient: false
+ },
+ elements: {},
+
+ async init() {
+ this.elements = {
+ loader: document.getElementById('loader'), 
+ loaderText: document.getElementById('loaderText'),
+ loginScreen: document.getElementById('login-screen'),
+ appContainer: document.getElementById('app-container'),
+ modalContainer: document.getElementById('modal-container'), 
+ modalContent: document.getElementById('modal-content'), 
+ notificationContainer: document.getElementById('notification-container'),
+ };
+
+ this.elements.loader.classList.remove('hidden');
+
+ try {
+ const config = await callApi('getLoginScreenConfig');
+ this.renderLoginScreen(config);
+ } catch(e) {
+ console.error("Falha ao carregar configuração inicial", e);
+ this.elements.loginScreen.innerHTML = `<div class="text-center text-red-500">Falha ao carregar o sistema. Verifique sua conexão e a URL da API.</div>`;
+ } finally {
+ this.elements.loader.classList.add('hidden');
+ }
+ },
+ 
+ renderLoginScreen(config) {
+ this.elements.loginScreen.innerHTML = `
+ <div class="w-full max-w-md">
+  <div class="p-8 space-y-6 bg-white rounded-2xl shadow-xl">
+  <div class="text-center">
+  <img id="loginLogo" src="${config.logoUrl || ''}" alt="Logo" class="${config.logoUrl ? '' : 'hidden'} h-24 w-24 rounded-full object-contain bg-white p-1 mx-auto mb-4 border-4 border-slate-100">
+  <h1 id="loginTitle" class="text-3xl font-bold text-slate-900">${config.businessName || 'Sistema de Agendamento'}</h1>
+  <p class="mt-2 text-slate-500">Selecione seu perfil para continuar</p>
+  </div>
+  <form id="login-form" class="space-y-6">
+  <div>
+  <label for="roleSelect" class="form-label">Perfil de Acesso</label>
+  <select id="roleSelect" class="form-select mt-1">
+  <option value="atendente">Atendente</option>
+  <option value="profissional">Profissional</option>
+  <option value="master">Master</option>
+  </select>
+  </div>
+  <div>
+  <label for="username" class="form-label">Email ou Usuário</label>
+  <input type="text" id="username" class="form-input mt-1" placeholder="seu.usuario@email.com">
+  </div>
+  <div>
+  <label for="password" class="form-label">Senha</label>
+  <input type="password" id="password" class="form-input mt-1" placeholder="••••••••">
+  </div>
+  <div>
+  <button type="submit" class="w-full btn btn-primary mt-2">
+  <i class="fa-solid fa-right-to-bracket mr-2"></i>
+  <span>Entrar</span>
+  </button>
+  </div>
+  <p id="login-error" class="text-sm text-center text-red-500 font-medium h-4"></p>
+  </form>
+  </div>
+  <p class="text-center text-xs text-slate-400 mt-4">Desenvolvido por Thiego Pereira</p>
+ </div>`;
+ 
+ this.elements.loginForm = document.getElementById('login-form');
+ this.elements.loginError = document.getElementById('login-error');
+ this.elements.loginForm.addEventListener('submit', this.handleLogin.bind(this));
+ },
+
+ showLoader(text = 'Carregando...') {
+ this.elements.loaderText.textContent = text;
+ this.elements.loader.classList.remove('hidden');
+ },
+
+ hideLoader() {
+ this.elements.loader.classList.add('hidden');
+ },
+
+ async handleLogin(event) {
+ event.preventDefault();
+ this.showLoader('Carregando sistema...');
+ this.elements.loginError.textContent = '';
+ const credentials = { 
+ role: this.elements.loginForm.roleSelect.value, 
+ username: this.elements.loginForm.username.value.trim(), 
+ password: this.elements.loginForm.password.value 
+ };
+ 
+ try {
+ const loginResponse = await callApi('doLogin', { credentials });
+ if (!loginResponse.success) {
+ throw new Error(loginResponse.message || 'Credenciais inválidas.');
+ }
+
+ this.state.currentUser = loginResponse.user;
+ 
+ if (this.state.currentUser.role === 'profissional') {
+ this.state.data = await callApi('getCoreProfessionalData');
+ } else {
+ this.state.data = await callApi('getCoreData');
+ }
+ 
+ this.launchApp();
+
+ let defaultViewId;
+ if (this.state.currentUser.role === 'profissional') {
+ const agendaData = await callApi('getAgendaUpdate', { profId: this.state.currentUser.id });
+ this.state.data.agendaData = agendaData;
+ defaultViewId = 'professional-agenda';
+ } else { // Master e Atendente
+ const appointments = await callApi('getRecentAndFutureAppointments');
+ const dashboardStats = await callApi('getDashboardStats');
+ this.state.data.appointments = appointments;
+ this.state.data.dashboardStats = dashboardStats;
+ defaultViewId = this.state.currentUser.role === 'master' ? 'master-dashboard' : 'attendant-agenda';
+ }
+ 
+ this.navigateTo(defaultViewId, true);
+
+ } catch (e) {
+ this.elements.loginError.textContent = e.message || 'Erro de comunicação.';
+ console.error(e);
+ } finally {
+ this.hideLoader();
+ }
+ },
+
+ launchApp() {
+ this.elements.loginScreen.classList.add('hidden');
+ this.elements.appContainer.classList.remove('hidden');
+ 
+ this.buildLayout();
+ this.attachEventListeners();
+ 
+ const logoConfig = this.state.data.config.find(c => c.Chave === 'LOGO_URL');
+ if (logoConfig && logoConfig.Valor) {
+ this.elements.sidebarLogo.src = logoConfig.Valor;
+ this.elements.sidebarLogo.classList.remove('hidden');
+ }
+ 
+ const menu = this.getNavMenuForRole(this.state.currentUser.role);
+ if (menu.length > 0) {
+ this.navigateTo(menu[0].id);
+ }
+ },
+
+ buildLayout() {
+ const menu = this.getNavMenuForRole(this.state.currentUser.role);
+ let navLinksHtml = menu.map(item => `<a href="#" data-view="${item.id}" class="nav-link"><i class="fa-solid ${item.icon} fa-fw w-6"></i><span>${item.label}</span></a>`).join('');
+ 
+ const businessNameConfig = this.state.data.config.find(c => c.Chave === 'NOME_NEGOCIO');
+ const businessName = businessNameConfig ? businessNameConfig.Valor : 'AgendaPRO';
+
+ let titleHtml = `<h1 class="ml-3 text-2xl font-bold text-slate-800">${businessName}</h1>`;
+ 
+ if (this.state.currentUser.role === 'profissional') {
+ const professionalName = this.state.currentUser.name.split(' ')[0];
+ titleHtml = `<div class="ml-3 text-left"><h1 class="text-2xl font-bold text-slate-800">Agenda</h1><p class="text-sm text-slate-500">${professionalName}</p></div>`;
+ } else if (this.state.currentUser.role === 'atendente') {
+ titleHtml = `<h1 class="ml-3 text-2xl font-bold text-slate-800">Recepção</h1>`;
+ }
+
+ if (this.state.currentUser.role === 'profissional') {
+ navLinksHtml += `
+ <a href="#" id="sidebarNewAppointmentBtn" class="nav-link bg-blue-600 text-white hover:bg-blue-700 hover:text-white mt-2">
+ <i class="fa-solid fa-plus fa-fw w-6"></i><span>Novo Agendamento</span>
+ </a>`;
+ }
+ 
+ const isHelpUser = ['atendente', 'profissional'].includes(this.state.currentUser.role);
+ const helpButtonHtml = isHelpUser ? `
+ <button id="help-fab" class="fixed bottom-6 right-6 z-40 h-14 w-14 rounded-full bg-blue-600 text-white shadow-lg hover:bg-blue-700 transition-transform duration-200 hover:scale-110 flex items-center justify-center">
+ <i class="fa-solid fa-question fa-lg"></i>
+ </button>` : '';
+
+ this.elements.appContainer.innerHTML = `
+ <div class="h-screen flex flex-col">
+ <div class="relative flex-1 flex md:flex-row overflow-hidden">
+ <div id="sidebar-overlay" class="fixed inset-0 bg-black/50 z-20 hidden md:hidden"></div>
+ <aside id="sidebar" class="fixed inset-y-0 left-0 bg-white w-64 flex flex-col z-30 transform -translate-x-full md:relative md:translate-x-0 border-r border-slate-200">
+ <div class="flex items-center justify-center h-20 border-b border-slate-200 px-4">
+ <img id="sidebarLogo" src="" alt="Logo" class="hidden h-12 w-12 rounded-full object-contain bg-white p-1">
+ ${titleHtml}
+ </div>
+ <nav class="flex-grow p-2 space-y-1">${navLinksHtml}</nav>
+ <div class="p-4 border-t border-slate-200 mt-auto">
+ <button id="logout-button" class="w-full btn btn-secondary !bg-slate-100 hover:!bg-red-500 hover:!text-white">
+ <i class="fa-solid fa-right-from-bracket mr-2"></i>Sair
+ </button>
+ </div>
+ </aside>
+ <main class="flex-1 flex flex-col w-full overflow-hidden">
+ 
+ <header class="bg-white/80 backdrop-blur-sm border-b border-slate-200 p-4 flex justify-between items-center sticky top-0 z-10">
+ <div class="flex items-center">
+ <button id="menu-btn" class="text-slate-600 hover:text-slate-900 md:hidden mr-4"><i class="fa-solid fa-bars fa-xl"></i></button>
+ <h2 id="view-title" class="text-xl font-bold text-slate-800"></h2>
+ <button id="openCallScreenBtn" class="btn btn-secondary ml-4" title="Abrir Painel de Chamada para Clientes">
+ <i class="fa-solid fa-desktop mr-2"></i>
+ <span>Painel</span>
+ </button>
+ </div>
+ <div class="text-right">
+ <p class="font-semibold text-slate-700">${this.state.currentUser.name}</p>
+ <p class="text-sm text-slate-500 capitalize">${this.state.currentUser.role}</p>
+ </div>
+ </header>
+ <div id="main-content" class="flex-1 p-4 md:p-6 overflow-y-auto"></div>
+ <footer class="text-center p-4 text-xs text-slate-400 border-t border-slate-200 bg-slate-50">
+  Desenvolvido por Thiego Pereira
+ </footer>
+ ${helpButtonHtml}
+ </main>
+ </div>
+ </div>`;
+ this.elements.mainContent = document.getElementById('main-content');
+ this.elements.sidebarLogo = document.getElementById('sidebarLogo');
+ },
+ 
+ getNavMenuForRole(role) {
+ const menus = {
+ master: [ { id: 'master-dashboard', label: 'Dashboard', icon: 'fa-tachometer-alt' }, { id: 'master-appointments', label: 'Agendamentos', icon: 'fa-calendar-days' }, { id: 'master-professionals', label: 'Profissionais', icon: 'fa-user-tie' }, { id: 'master-attendants', label: 'Atendentes', icon: 'fa-users' }, { id: 'master-services', label: 'Serviços', icon: 'fa-tags' }, { id: 'master-settings', label: 'Configurações', icon: 'fa-gear' }, { id: 'master-import', label: 'Importar Dados', icon: 'fa-upload' } ],
+ atendente: [ { id: 'attendant-agenda', label: 'Agenda do Dia', icon: 'fa-calendar-day' }, { id: 'attendant-schedule', label: 'Novo Agendamento', icon: 'fa-plus' } ],
+ profissional: [ { id: 'professional-agenda', label: 'Minha Agenda', icon: 'fa-calendar-check' }, { id: 'professional-client-search', label: 'Clientes Cadastrados', icon: 'fa-search' } ]
+ };
+ return menus[role] || [];
+ },
+
+ navigateTo(viewId, isRefresh = false) {
+ if (!isRefresh && this.state.currentView === viewId) return;
+ this.state.currentView = viewId;
+ if (this.state.agendaRefreshInterval) { clearInterval(this.state.agendaRefreshInterval); this.state.agendaRefreshInterval = null; }
+ 
+ document.querySelectorAll('.nav-link').forEach(link => {
+ link.classList.toggle('active-link', link.dataset.view === viewId);
+ });
+ 
+ const viewActions = {
+ 'master-dashboard': this.renderMasterDashboard, 'master-appointments': this.renderMasterAppointments,
+ 'master-professionals': this.renderMasterProfessionals, 'master-attendants': this.renderMasterAttendants,
+ 'master-services': this.renderMasterServices, 'master-settings': this.renderMasterSettings,
+ 'master-import': this.renderMasterImport, 
+ 'attendant-schedule': this.renderAttendantSchedule,
+ 'attendant-agenda': this.renderAttendantAgenda, 
+ 'professional-agenda': this.renderProfessionalAgenda,
+ 'professional-client-search': this.renderProfessionalClientSearch 
+ };
+ const action = viewActions[viewId];
+ if (action) {
+ action.call(this);
+ }
+ 
+ const sidebar = document.getElementById('sidebar');
+ if (sidebar.classList.contains('open')) {
+ sidebar.classList.remove('open');
+ sidebar.classList.add('-translate-x-full');
+ document.getElementById('sidebar-overlay').classList.add('hidden');
+ }
+ },
+ 
+ async refreshData(viewToRender, silent = false) {
+ if (!silent) this.showLoader('Atualizando dados...');
+ try {
+ if (this.state.currentUser.role === 'profissional') {
+ this.state.data = await callApi('getProfessionalData', { profId: this.state.currentUser.id });
+ } else {
+ this.state.data = await callApi('getInitialData');
+ }
+ this.state.lastUpdateTimestamp = this.state.data.latestUpdate;
+ if (viewToRender) { this.navigateTo(viewToRender, true); }
+ } catch (e) { this.showNotification('error', 'Falha na Sincronização', e.message); } 
+ finally { 
+ if (!silent) this.hideLoader();
+ }
+ },
+ 
+ handleLogout() {
+ if (this.state.agendaRefreshInterval) {
+ clearInterval(this.state.agendaRefreshInterval);
+ this.state.agendaRefreshInterval = null;
+ }
+ this.state.currentUser = null;
+ this.state.currentView = null;
+ 
+ this.elements.appContainer.classList.add('hidden');
+ this.elements.loginScreen.classList.remove('hidden');
+ 
+ this.init();
+ },
+
+ attachEventListeners() {
+ document.getElementById('logout-button').addEventListener('click', this.handleLogout.bind(this));
+ 
+ const appContainer = document.getElementById('app-container');
+ 
+ appContainer.addEventListener('click', (e) => {
+ const navLink = e.target.closest('a.nav-link');
+ if (navLink) {
+ e.preventDefault();
+ if (navLink.id === 'sidebarNewAppointmentBtn') {
+ this.renderAttendantSchedule(this.state.currentUser.id);
+ return; 
+ }
+ if (navLink.dataset.view) {
+ this.navigateTo(navLink.dataset.view);
+ }
+ }
+ 
+ const helpButton = e.target.closest('#help-fab');
+ if (helpButton) {
+ const helpConfig = this.state.data.config.find(c => c.Chave === 'HELP_MESSAGE');
+ const helpMessage = helpConfig && helpConfig.Valor ? helpConfig.Valor.replace(/\n/g, '<br>') : 'Nenhuma mensagem de ajuda configurada.';
+ this.openModal('Ajuda Rápida', `<div class="prose prose-slate max-w-none">${helpMessage}</div>`);
+ }
+ });
+
+ const menuBtn = document.getElementById('menu-btn'), sidebar = document.getElementById('sidebar'), sidebarOverlay = document.getElementById('sidebar-overlay');
+ const toggleSidebar = () => { sidebar.classList.toggle('open'); sidebar.classList.toggle('-translate-x-full'); sidebarOverlay.classList.toggle('hidden'); };
+ if (menuBtn) menuBtn.addEventListener('click', toggleSidebar);
+ if (sidebarOverlay) sidebarOverlay.addEventListener('click', toggleSidebar);
+
+ const openCallScreenBtn = document.getElementById('openCallScreenBtn');
+ if (openCallScreenBtn) {
+ openCallScreenBtn.addEventListener('click', () => {
+ const callScreenConfig = this.state.data.config.find(c => c.Chave === 'CALL_SCREEN_URL');
+ if (callScreenConfig && callScreenConfig.Valor) {
+ window.open(callScreenConfig.Valor, '_blank');
+ } else {
+ this.showNotification('error', 'URL não encontrada', 'A URL do Painel de Chamada não está definida nas Configurações do sistema.');
+ }
+ });
+ }
+ },
+
+ openModal(title, contentHTML, maxWidthClass = 'max-w-2xl') {
+ const modalContent = this.elements.modalContent;
+ modalContent.className = `bg-white rounded-xl shadow-2xl w-full border border-slate-200 transform scale-95 transition-transform duration-300 flex flex-col max-h-[90vh] ${maxWidthClass}`;
+ modalContent.innerHTML = `
+ <div class="flex justify-between items-center p-4 border-b border-slate-200 sticky top-0 bg-white z-10">
+ <h3 class="text-lg font-semibold text-slate-800">${title}</h3>
+ <button class="btn-icon" onclick="App.closeModal()"><i class="fa-solid fa-times"></i></button>
+ </div>
+ <div class="overflow-y-auto p-6 text-slate-800">${contentHTML}</div>`;
+ this.elements.modalContainer.classList.remove('hidden');
+ setTimeout(() => { this.elements.modalContainer.classList.add('opacity-100'); modalContent.classList.remove('scale-95'); modalContent.classList.add('scale-100'); }, 10);
+ },
+
+ closeModal() {
+ const self = App;
+ self.elements.modalContainer.classList.remove('opacity-100');
+ self.elements.modalContent.classList.remove('scale-100');
+ setTimeout(() => { self.elements.modalContainer.classList.add('hidden'); self.elements.modalContent.innerHTML = ''; }, 300);
+ },
+ 
+ showNotification(type, title, message) {
+ const template = document.getElementById('notification-template');
+ const clone = template.content.cloneNode(true);
+ const item = clone.querySelector('.notification-item');
+ const icon = clone.querySelector('i');
+ const config = { success: { icon: 'fa-check-circle', color: 'green' }, error: { icon: 'fa-times-circle', color: 'red' }, alert: { icon: 'fa-exclamation-triangle', color: 'yellow' } };
+ item.classList.add(`border-${config[type].color}-300`);
+ icon.classList.add(config[type].icon, `text-${config[type].color}-500`);
+ clone.querySelector('.font-semibold').textContent = title;
+ clone.querySelector('.mt-1').textContent = message;
+ this.elements.notificationContainer.appendChild(clone);
+ setTimeout(() => item.remove(), 5000);
+ },
+
+ initChart(canvasId, type, data, options = {}) {
+ const ctx = document.getElementById(canvasId)?.getContext('2d');
+ if(ctx) {
+ if (this.state.charts[canvasId]) this.state.charts[canvasId].destroy();
+ this.state.charts[canvasId] = new Chart(ctx, { type, data, options: { responsive: true, maintainAspectRatio: false, ...options }});
+ }
+ },
+
+ confirmAction(message, callback) {
+ const contentHTML = `
+ <div><p class="mb-6 text-slate-600">${message}</p></div>
+ <div class="flex justify-end gap-4 pt-4 border-t border-slate-200 mt-4">
+ <button id="confirmCancelBtn" class="btn btn-secondary">Cancelar</button>
+ <button id="confirmOkBtn" class="btn btn-danger">Confirmar</button>
+ </div>`;
+ this.openModal('Confirmação', contentHTML, 'max-w-md');
+ document.getElementById('confirmOkBtn').addEventListener('click', () => { callback(); this.closeModal(); });
+ document.getElementById('confirmCancelBtn').addEventListener('click', this.closeModal);
+ }
+};
+</script>
